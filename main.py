@@ -10,12 +10,12 @@ pygame.init()
 
 WIDTH, HEIGHT = 4480, 2520
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
-pygame.display.set_caption("The Backrooms - Level 0 - Enhanced")
+pygame.display.set_caption("The Backrooms - Level 0 - Optimized Textured")
 
 FPS = 60
 
 # Performance settings
-RENDER_SCALE = 1.0  # 1.0 = full resolution, 0.5 = half resolution (much faster)
+RENDER_SCALE = 0.5  # Start at half resolution for better performance
 # Press R to toggle between 1.0 and 0.5 during gameplay
 
 # Blue and yellow aesthetic colors
@@ -48,29 +48,180 @@ PILLAR_DENSITY = 0.5
 WALL_CONNECTION_CHANCE = 0.4
 RENDER_DISTANCE = 200
 
-# NEW: Camera effects settings
+# Camera effects settings
 HEAD_BOB_SPEED = 3.0
-HEAD_BOB_AMOUNT = 3  # Increased from 0.3 to 0.6
-HEAD_BOB_SWAY = 1  # Increased from 0.1 to 0.2
+HEAD_BOB_AMOUNT = 3
+HEAD_BOB_SWAY = 1
 CAMERA_SHAKE_AMOUNT = 0.05
 
-# NEW: Vignette settings (currently disabled)
-VIGNETTE_STRENGTH = 0.2  # Subtle vignette (not currently applied)
-
-# NEW: Fog settings - only affects very distant objects
-FOG_START = 180  # Starts very far away
-FOG_END = 300  # Complete beyond render distance
+# Fog settings
+FOG_START = 180
+FOG_END = 300
 FOG_COLOR = (20, 30, 45)
 
-# NEW: Flickering settings
-FLICKER_CHANCE = 0.0003  # Very rare
+# Flickering settings
+FLICKER_CHANCE = 0.0003
 FLICKER_DURATION = 0.08
-FLICKER_BRIGHTNESS = 0.15  # Subtle
+FLICKER_BRIGHTNESS = 0.15
 
 # Ambient sound settings
 FOOTSTEP_INTERVAL = (10, 30)
 BUZZ_INTERVAL = (5, 15)
 ENTITY_INTERVAL = (45, 120)
+
+# Texture settings - smaller for better performance
+TEXTURE_SIZE = 64
+
+
+# ---------- OPTIMIZED TEXTURE GENERATION ----------
+
+def generate_carpet_texture(size=TEXTURE_SIZE):
+    """Generate a realistic carpet texture with noise and patterns."""
+    texture = np.zeros((size, size, 3), dtype=np.uint8)
+
+    # Base carpet colors (beige/tan)
+    base_r = 170
+    base_g = 160
+    base_b = 150
+
+    # Add fine grain noise for carpet texture
+    for i in range(size):
+        for j in range(size):
+            noise = random.randint(-20, 20)
+            texture[i, j] = [
+                np.clip(base_r + noise, 0, 255),
+                np.clip(base_g + noise, 0, 255),
+                np.clip(base_b + noise, 0, 255)
+            ]
+
+    # Add some darker patches/stains
+    num_stains = 3
+    for _ in range(num_stains):
+        cx, cy = random.randint(0, size - 1), random.randint(0, size - 1)
+        radius = random.randint(5, 15)
+        darkness = 0.7
+
+        for i in range(max(0, cx - radius), min(size, cx + radius)):
+            for j in range(max(0, cy - radius), min(size, cy + radius)):
+                dist = math.sqrt((i - cx) ** 2 + (j - cy) ** 2)
+                if dist < radius:
+                    factor = 1 - (dist / radius) * (1 - darkness)
+                    texture[i, j] = (texture[i, j] * factor).astype(np.uint8)
+
+    return pygame.surfarray.make_surface(texture.swapaxes(0, 1))
+
+
+def generate_ceiling_tile_texture(size=TEXTURE_SIZE):
+    """Generate a ceiling tile texture with bumpy pattern."""
+    texture = np.zeros((size, size, 3), dtype=np.uint8)
+
+    # Base white/off-white color
+    base_color = 210
+
+    # Create bumpy pattern
+    for i in range(size):
+        for j in range(size):
+            pattern = math.sin(i * 0.5) * math.cos(j * 0.5)
+            noise = random.randint(-10, 10)
+
+            value = int(base_color + pattern * 15 + noise)
+            value = np.clip(value, 180, 240)
+
+            texture[i, j] = [value, value, value]
+
+    # Add yellowish tint
+    texture[:, :, 0] = np.clip(texture[:, :, 0] + 10, 0, 255)
+    texture[:, :, 1] = np.clip(texture[:, :, 1] + 5, 0, 255)
+
+    # Add water stains
+    num_stains = 2
+    for _ in range(num_stains):
+        cx, cy = random.randint(0, size - 1), random.randint(0, size - 1)
+        radius = random.randint(8, 20)
+
+        for i in range(max(0, cx - radius), min(size, cx + radius)):
+            for j in range(max(0, cy - radius), min(size, cy + radius)):
+                dist = math.sqrt((i - cx) ** 2 + (j - cy) ** 2)
+                if dist < radius:
+                    factor = 0.7 + (dist / radius) * 0.3
+                    texture[i, j, 0] = int(texture[i, j, 0] * factor + 40 * (1 - factor))
+                    texture[i, j, 1] = int(texture[i, j, 1] * factor + 30 * (1 - factor))
+                    texture[i, j, 2] = int(texture[i, j, 2] * factor + 20 * (1 - factor))
+
+    # Add grid lines
+    grid_color = 160
+    for i in range(0, size, size // 4):
+        if i < size:
+            texture[i:i + 1, :] = grid_color
+            texture[:, i:i + 1] = grid_color
+
+    return pygame.surfarray.make_surface(texture.swapaxes(0, 1))
+
+
+def generate_wall_texture(size=TEXTURE_SIZE):
+    """Generate a drywall/painted wall texture."""
+    texture = np.zeros((size, size, 3), dtype=np.uint8)
+
+    # Base yellowish wall color
+    base_r = 220
+    base_g = 200
+    base_b = 100
+
+    # Add texture noise
+    for i in range(size):
+        for j in range(size):
+            noise = random.randint(-8, 8)
+            texture[i, j] = [
+                np.clip(base_r + noise, 0, 255),
+                np.clip(base_g + noise, 0, 255),
+                np.clip(base_b + noise, 0, 255)
+            ]
+
+    # Add scuff marks
+    num_scuffs = 8
+    for _ in range(num_scuffs):
+        x = random.randint(0, size - 1)
+        y = random.randint(size // 2, size - 1)
+        length = random.randint(2, 6)
+
+        for dx in range(-length, length):
+            for dy in range(-1, 2):
+                if 0 <= x + dx < size and 0 <= y + dy < size:
+                    texture[x + dx, y + dy] = (texture[x + dx, y + dy] * 0.7).astype(np.uint8)
+
+    return pygame.surfarray.make_surface(texture.swapaxes(0, 1))
+
+
+def generate_pillar_texture(size=TEXTURE_SIZE):
+    """Generate a pillar texture (painted drywall with wear)."""
+    texture = np.zeros((size, size, 3), dtype=np.uint8)
+
+    # Yellow pillar base color
+    base_r = 220
+    base_g = 200
+    base_b = 100
+
+    # Add subtle texture
+    for i in range(size):
+        for j in range(size):
+            noise = random.randint(-10, 10)
+            texture[i, j] = [
+                np.clip(base_r + noise, 0, 255),
+                np.clip(base_g + noise, 0, 255),
+                np.clip(base_b + noise, 0, 255)
+            ]
+
+    # Add corner damage
+    corners = [(0, 0), (size - 1, 0), (0, size - 1), (size - 1, size - 1)]
+    for cx, cy in corners:
+        radius = random.randint(4, 10)
+        for i in range(max(0, cx - radius), min(size, cx + radius)):
+            for j in range(max(0, cy - radius), min(size, cy + radius)):
+                dist = math.sqrt((i - cx) ** 2 + (j - cy) ** 2)
+                if dist < radius and random.random() < 0.7:
+                    texture[i, j] = (texture[i, j] * 0.6).astype(np.uint8)
+
+    return pygame.surfarray.make_surface(texture.swapaxes(0, 1))
 
 
 # ---------- AUDIO GENERATION ----------
@@ -115,7 +266,7 @@ def generate_footstep_sound():
     reverb = np.exp(-t * 5) * np.random.normal(0, 0.1, samples)
 
     sound = impact + reverb * 0.3
-    sound = sound / np.max(np.abs(sound)) * 0.7  # Increased from 0.4 to 0.7
+    sound = sound / np.max(np.abs(sound)) * 0.7
 
     audio = np.array(sound * 32767, dtype=np.int16)
     stereo_audio = np.column_stack((audio, audio))
@@ -129,16 +280,14 @@ def generate_player_footstep_sound():
     samples = int(SAMPLE_RATE * duration)
     t = np.linspace(0, duration, samples, False)
 
-    # Stronger impact for player footsteps
     impact = np.exp(-t * 25) * np.sin(2 * np.pi * 90 * t)
     impact += np.exp(-t * 20) * np.sin(2 * np.pi * 140 * t) * 0.6
     impact += np.exp(-t * 18) * np.sin(2 * np.pi * 60 * t) * 0.4
 
-    # Short reverb
     reverb = np.exp(-t * 8) * np.random.normal(0, 0.08, samples)
 
     sound = impact + reverb * 0.2
-    sound = sound / np.max(np.abs(sound)) * 0.5  # Moderate volume
+    sound = sound / np.max(np.abs(sound)) * 0.5
 
     audio = np.array(sound * 32767, dtype=np.int16)
     stereo_audio = np.column_stack((audio, audio))
@@ -216,7 +365,7 @@ def generate_entity_sound():
 # ---------- ENGINE ----------
 
 class BackroomsEngine:
-    """First-person Backrooms exploration engine with enhancements."""
+    """First-person Backrooms exploration engine with optimized texture mapping."""
 
     def __init__(self, width, height):
         self.width = width
@@ -244,34 +393,49 @@ class BackroomsEngine:
         self.pillar_cache = {}
         self.wall_cache = {}
 
-        # NEW: Camera effects
+        # Camera effects
         self.head_bob_time = 0
         self.is_moving = False
         self.camera_shake_time = random.random() * 100
+        self.last_footstep_phase = 0
 
-        # NEW: Player footstep tracking
-        self.last_footstep_phase = 0  # Track when we last played a footstep based on head bob
-
-        # NEW: Flickering
+        # Flickering
         self.flicker_timer = 0
         self.is_flickering = False
         self.flicker_brightness = 1.0
 
-        # NEW: Sound timers
+        # Sound timers
         self.next_footstep = random.uniform(*FOOTSTEP_INTERVAL)
         self.next_buzz = random.uniform(*BUZZ_INTERVAL)
         self.next_entity = random.uniform(*ENTITY_INTERVAL)
         self.sound_timer = 0
 
-        # NEW: Render scale for performance
+        # Render scale for performance
         self.render_scale = RENDER_SCALE
         self.target_render_scale = RENDER_SCALE
-        self.render_scale_transition_speed = 2.0  # How fast to zoom (units per second)
+        self.render_scale_transition_speed = 2.0
         self.render_surface = None
         self.update_render_surface()
 
-        # NEW: Player footstep tracking
-        self.last_footstep_phase = 0  # Track when we last played a footstep based on head bob
+        # Generate textures
+        print("Generating procedural textures...")
+        self.carpet_texture = generate_carpet_texture()
+        self.ceiling_texture = generate_ceiling_tile_texture()
+        self.wall_texture = generate_wall_texture()
+        self.pillar_texture = generate_pillar_texture()
+
+        # Pre-tint textures for average colors (optimization)
+        self.carpet_avg = self._get_average_color(self.carpet_texture)
+        self.ceiling_avg = self._get_average_color(self.ceiling_texture)
+        self.wall_avg = self._get_average_color(self.wall_texture)
+        self.pillar_avg = self._get_average_color(self.pillar_texture)
+
+        print("Textures generated!")
+
+    def _get_average_color(self, surface):
+        """Get average color of a surface."""
+        arr = pygame.surfarray.array3d(surface)
+        return tuple(int(arr[:, :, i].mean()) for i in range(3))
 
     def update_render_surface(self):
         """Update render surface based on current scale."""
@@ -291,18 +455,14 @@ class BackroomsEngine:
     def update_render_scale(self, dt):
         """Smoothly transition render scale."""
         if abs(self.render_scale - self.target_render_scale) > 0.01:
-            # Smooth interpolation
             if self.render_scale < self.target_render_scale:
                 self.render_scale = min(self.target_render_scale,
                                         self.render_scale + self.render_scale_transition_speed * dt)
             else:
                 self.render_scale = max(self.target_render_scale,
                                         self.render_scale - self.render_scale_transition_speed * dt)
-
-            # Update render surface when scale changes
             self.update_render_surface()
         else:
-            # Snap to target when close enough
             if self.render_scale != self.target_render_scale:
                 self.render_scale = self.target_render_scale
                 self.update_render_surface()
@@ -311,20 +471,16 @@ class BackroomsEngine:
         """Update and trigger ambient sounds with directional audio."""
         self.sound_timer += dt
 
-        # Distant footsteps with random direction
         if self.sound_timer >= self.next_footstep:
-            # Generate random direction for footstep
             angle = random.uniform(0, 2 * math.pi)
             self.play_directional_sound(sound_effects['footstep'], angle)
             self.next_footstep = self.sound_timer + random.uniform(*FOOTSTEP_INTERVAL)
 
-        # Electrical buzzing with random direction
         if self.sound_timer >= self.next_buzz:
             angle = random.uniform(0, 2 * math.pi)
             self.play_directional_sound(sound_effects['buzz'], angle)
             self.next_buzz = self.sound_timer + random.uniform(*BUZZ_INTERVAL)
 
-        # Entity sounds with random direction
         if self.sound_timer >= self.next_entity:
             angle = random.uniform(0, 2 * math.pi)
             self.play_directional_sound(sound_effects['entity'], angle)
@@ -332,47 +488,29 @@ class BackroomsEngine:
 
     def play_directional_sound(self, sound, world_angle):
         """Play sound with stereo panning based on direction relative to camera yaw."""
-        # Calculate angle difference between sound and camera direction
         angle_diff = world_angle - self.yaw_s
 
-        # Normalize to -pi to pi
         while angle_diff > math.pi:
             angle_diff -= 2 * math.pi
         while angle_diff < -math.pi:
             angle_diff += 2 * math.pi
 
-        # Convert to stereo panning
-        # angle_diff: -pi (behind left) to 0 (front) to pi (behind right)
-        # Pan: 0.0 (left only) to 0.5 (center) to 1.0 (right only)
-
-        # Sounds in front/behind are centered, sounds to the sides are panned
         pan = 0.5 + (angle_diff / math.pi) * 0.5
         pan = max(0.0, min(1.0, pan))
 
-        # Set stereo volume using channel
         channel = sound.play()
         if channel:
-            # set_volume takes a single float, but we can set left/right via set_volume on channel
-            # Left volume: 1.0 when pan=0, 0.0 when pan=1
-            # Right volume: 0.0 when pan=0, 1.0 when pan=1
             left_volume = 1.0 - pan
             right_volume = pan
-
-            # Average volume so total loudness is consistent
-            avg_volume = 0.7  # Base volume for ambient sounds
+            avg_volume = 0.7
             channel.set_volume(avg_volume * left_volume, avg_volume * right_volume)
 
     def update_player_footsteps(self, dt, footstep_sound):
         """Play footsteps synced to walking animation."""
         if self.is_moving:
-            # Use head bob phase to trigger footsteps
-            # Play one footstep per complete bob cycle (when crossing back to 0)
             current_phase = self.head_bob_time % 1.0
-
-            # Play footstep when crossing from end of cycle back to beginning
             if self.last_footstep_phase > current_phase and current_phase < 0.1:
                 footstep_sound.play()
-
             self.last_footstep_phase = current_phase
         else:
             self.last_footstep_phase = 0
@@ -393,17 +531,13 @@ class BackroomsEngine:
     def apply_fog(self, color, distance):
         """Apply subtle distance-based fog."""
         if distance < FOG_START:
-            # No fog close up - just apply flicker
             return tuple(int(c * self.flicker_brightness) for c in color)
 
         if distance > FOG_END:
-            # Maximum fog at far distance
             fog_color = tuple(int(c * self.flicker_brightness) for c in FOG_COLOR)
             return fog_color
 
-        # Linear interpolation
         fog_amount = (distance - FOG_START) / (FOG_END - FOG_START)
-
         adjusted_color = tuple(int(c * self.flicker_brightness) for c in color)
         fog_color = tuple(int(c * self.flicker_brightness) for c in FOG_COLOR)
 
@@ -413,8 +547,7 @@ class BackroomsEngine:
         )
 
     def apply_surface_noise(self, color, x, z):
-        """Add cheap procedural noise to surfaces for aging effect."""
-        # Simple position-based noise
+        """Add cheap procedural noise to surfaces."""
         noise = ((int(x) * 13 + int(z) * 17) % 5) - 2
         return tuple(max(0, min(255, c + noise)) for c in color)
 
@@ -600,16 +733,16 @@ class BackroomsEngine:
         return out
 
     def draw_world_poly(self, surface, world_pts, color, width_edges=0, edge_color=None):
-        """Draw polygon with optional noise and fog."""
+        """Draw polygon with texture color approximation and fog."""
         cam_pts = [self.world_to_camera(*p) for p in world_pts]
 
-        # Calculate average distance for fog
         distances = [math.sqrt(p[0] ** 2 + p[1] ** 2 + p[2] ** 2) for p in cam_pts]
         avg_dist = sum(distances) / len(distances) if distances else 0
 
-        # Apply surface noise based on world position
         avg_x = sum(p[0] for p in world_pts) / len(world_pts)
         avg_z = sum(p[2] for p in world_pts) / len(world_pts)
+
+        # Apply surface noise
         noisy_color = self.apply_surface_noise(color, avg_x, avg_z)
 
         # Apply fog
@@ -633,16 +766,13 @@ class BackroomsEngine:
                                  screen_pts[(i + 1) % len(screen_pts)], width_edges)
 
     def render(self, surface):
-        """Render the Backrooms with enhancements."""
-        # Render to scaled surface for performance
+        """Render the Backrooms with optimized texture-colored rendering."""
         target_surface = self.render_surface
-
         target_surface.fill(BLACK)
 
         # Background
         horizon = int(target_surface.get_height() * 0.5 + self.pitch_s * 500 * self.render_scale)
 
-        # Apply flicker to background
         floor_bg = tuple(int(c * self.flicker_brightness) for c in FLOOR_COLOR)
         ceiling_bg = tuple(int(c * self.flicker_brightness) for c in CEILING_COLOR)
 
@@ -670,8 +800,6 @@ class BackroomsEngine:
             pygame.transform.smoothscale(target_surface, (self.width, self.height), surface)
         else:
             surface.blit(target_surface, (0, 0))
-
-        # Vignette removed per user request
 
     def _get_pillar_at(self, px, pz):
         """Check if pillar exists at position."""
@@ -701,7 +829,7 @@ class BackroomsEngine:
         return has_wall
 
     def _draw_floor_tiles(self, surface):
-        """Draw floor tiles."""
+        """Draw floor tiles with carpet color."""
         render_range = RENDER_DISTANCE
 
         start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
@@ -710,7 +838,7 @@ class BackroomsEngine:
         end_z = int((self.z_s + render_range) // PILLAR_SPACING) * PILLAR_SPACING
 
         floor_y = -2
-        edge_color = (40, 70, 110)
+        edge_color = (130, 120, 110)
 
         for px in range(start_x, end_x, PILLAR_SPACING):
             for pz in range(start_z, end_z, PILLAR_SPACING):
@@ -728,13 +856,13 @@ class BackroomsEngine:
                     [(px, floor_y, pz), (px + PILLAR_SPACING, floor_y, pz),
                      (px + PILLAR_SPACING, floor_y, pz + PILLAR_SPACING),
                      (px, floor_y, pz + PILLAR_SPACING)],
-                    FLOOR_COLOR,
+                    self.carpet_avg,
                     width_edges=1,
                     edge_color=edge_color
                 )
 
     def _draw_ceiling_tiles(self, surface):
-        """Draw ceiling tiles."""
+        """Draw ceiling tiles with ceiling color."""
         render_range = RENDER_DISTANCE
 
         start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
@@ -761,7 +889,7 @@ class BackroomsEngine:
                     [(px, ceiling_y, pz), (px + PILLAR_SPACING, ceiling_y, pz),
                      (px + PILLAR_SPACING, ceiling_y, pz + PILLAR_SPACING),
                      (px, ceiling_y, pz + PILLAR_SPACING)],
-                    CEILING_COLOR,
+                    self.ceiling_avg,
                     width_edges=1,
                     edge_color=edge_color
                 )
@@ -789,7 +917,7 @@ class BackroomsEngine:
             self._draw_single_pillar(surface, px, pz)
 
     def _draw_single_pillar(self, surface, px, pz):
-        """Draw a single pillar."""
+        """Draw a single pillar with texture color."""
         s = PILLAR_SIZE
         h = WALL_HEIGHT + ((px + pz) % 7 - 3) * 0.1
         edge_color = (160, 140, 60)
@@ -798,7 +926,7 @@ class BackroomsEngine:
         self.draw_world_poly(
             surface,
             [(px, h, pz), (px + s, h, pz), (px + s, -2, pz), (px, -2, pz)],
-            PILLAR_COLOR,
+            self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
         )
@@ -807,7 +935,7 @@ class BackroomsEngine:
         self.draw_world_poly(
             surface,
             [(px + s, h, pz + s), (px, h, pz + s), (px, -2, pz + s), (px + s, -2, pz + s)],
-            PILLAR_COLOR,
+            self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
         )
@@ -816,7 +944,7 @@ class BackroomsEngine:
         self.draw_world_poly(
             surface,
             [(px, h, pz), (px, h, pz + s), (px, -2, pz + s), (px, -2, pz)],
-            PILLAR_COLOR,
+            self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
         )
@@ -825,7 +953,7 @@ class BackroomsEngine:
         self.draw_world_poly(
             surface,
             [(px + s, h, pz + s), (px + s, h, pz), (px + s, -2, pz), (px + s, -2, pz + s)],
-            PILLAR_COLOR,
+            self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
         )
@@ -851,9 +979,8 @@ class BackroomsEngine:
                             self._draw_connecting_wall(surface, px, pz, px, pz + PILLAR_SPACING)
 
     def _draw_connecting_wall(self, surface, x1, z1, x2, z2):
-        """Draw a connecting wall."""
+        """Draw a connecting wall with texture color."""
         h = WALL_HEIGHT
-        wall_color = (240, 200, 60)
         edge_color = (200, 150, 30)
 
         if x1 == x2:
@@ -862,7 +989,7 @@ class BackroomsEngine:
                 surface,
                 [(x, h, z1 + PILLAR_SIZE), (x, h, z2), (x, -2, z2),
                  (x, -2, z1 + PILLAR_SIZE)],
-                wall_color,
+                self.wall_avg,
                 width_edges=3,
                 edge_color=edge_color
             )
@@ -872,7 +999,7 @@ class BackroomsEngine:
                 surface,
                 [(x1 + PILLAR_SIZE, h, z), (x2, h, z), (x2, -2, z),
                  (x1 + PILLAR_SIZE, -2, z)],
-                wall_color,
+                self.wall_avg,
                 width_edges=3,
                 edge_color=edge_color
             )
