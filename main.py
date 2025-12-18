@@ -25,7 +25,7 @@ WALL_COLOR = (100, 150, 200)
 FLOOR_COLOR = (60, 100, 150)
 CEILING_COLOR = (180, 210, 240)
 PILLAR_COLOR = (220, 200, 100)
-BLACK = (20, 30, 45)
+BLACK = (0, 150, 255)
 
 CAMERA_SMOOTHING = 0.08
 ROTATION_SMOOTHING = 0.12
@@ -41,14 +41,14 @@ SAMPLE_RATE = 22050
 AUDIO_BUFFER_SIZE = 2048
 
 # Enhanced room settings with zones
-PILLAR_SPACING = 42
+PILLAR_SPACING = 69
 PILLAR_SIZE = 8
 WALL_HEIGHT = 100
 CAMERA_HEIGHT = 50
-RENDER_DISTANCE = 200
+RENDER_DISTANCE = 500
 
 # Enhanced procedural generation settings
-ZONE_SIZE = 200  # Size of procedural zones
+ZONE_SIZE = 400  # Size of procedural zones
 
 # Camera effects settings
 HEAD_BOB_SPEED = 3.0
@@ -59,7 +59,7 @@ CAMERA_SHAKE_AMOUNT = 0.05
 # Fog settings
 FOG_START = 180
 FOG_END = 300
-FOG_COLOR = (20, 30, 45)
+FOG_COLOR = (0, 150, 255)
 
 # Flickering settings
 FLICKER_CHANCE = 0.0003
@@ -84,33 +84,33 @@ class ProceduralZone:
 
     ZONE_TYPES = {
         'normal': {
-            'pillar_density': 0.5,
-            'wall_chance': 0.4,
-            'ceiling_height_var': 2,
+            'pillar_density': 0.35,
+            'wall_chance': 0.25,
+            'ceiling_height_var': 5,
             'color_tint': (1.0, 1.0, 1.0)
         },
         'dense': {
-            'pillar_density': 0.75,
-            'wall_chance': 0.6,
-            'ceiling_height_var': 1,
+            'pillar_density': 0.55,
+            'wall_chance': 0.4,
+            'ceiling_height_var': 3,
             'color_tint': (0.95, 0.95, 0.85)
         },
         'sparse': {
-            'pillar_density': 0.25,
-            'wall_chance': 0.2,
-            'ceiling_height_var': 5,
+            'pillar_density': 0.15,
+            'wall_chance': 0.1,
+            'ceiling_height_var': 12,
             'color_tint': (1.05, 1.05, 1.15)
         },
         'maze': {
-            'pillar_density': 0.9,
-            'wall_chance': 0.8,
-            'ceiling_height_var': 0,
+            'pillar_density': 0.7,
+            'wall_chance': 0.6,
+            'ceiling_height_var': 2,
             'color_tint': (0.9, 0.9, 0.8)
         },
         'open': {
-            'pillar_density': 0.15,
-            'wall_chance': 0.1,
-            'ceiling_height_var': 8,
+            'pillar_density': 0.08,
+            'wall_chance': 0.05,
+            'ceiling_height_var': 20,
             'color_tint': (1.1, 1.1, 1.2)
         }
     }
@@ -895,17 +895,6 @@ class BackroomsEngine:
         target_surface = self.render_surface
         target_surface.fill(BLACK)
 
-        # Background
-        horizon = int(target_surface.get_height() * 0.5 + self.pitch_s * 500 * self.render_scale)
-
-        floor_bg = tuple(int(c * self.flicker_brightness) for c in FLOOR_COLOR)
-        ceiling_bg = tuple(int(c * self.flicker_brightness) for c in CEILING_COLOR)
-
-        pygame.draw.rect(target_surface, floor_bg,
-                         (0, horizon, target_surface.get_width(), target_surface.get_height() - horizon))
-        pygame.draw.rect(target_surface, ceiling_bg,
-                         (0, 0, target_surface.get_width(), horizon))
-
         # Temporarily adjust width/height for rendering
         original_width, original_height = self.width, self.height
         self.width = target_surface.get_width()
@@ -1148,8 +1137,8 @@ class BackroomsEngine:
             z = z1 + PILLAR_SIZE / 2
             self.draw_world_poly(
                 surface,
-                [(x1 + PILLAR_SIZE, h, z), (x2, h, z), (x2, -2, z),
-                 (x1 + PILLAR_SIZE, -2, z)],
+                [(x1 + PILLAR_SPACING, h, z), (x2, h, z), (x2, -2, z),
+                 (x1 + PILLAR_SPACING, -2, z)],
                 self.wall_avg,
                 width_edges=3,
                 edge_color=edge_color
