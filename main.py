@@ -33,7 +33,7 @@ MOVEMENT_SPEED = 50  # Slightly faster for larger scale
 ROTATION_SPEED = 2.0
 
 # Rendering settings
-NEAR = 0.5
+NEAR = 0.1  # Reduced from 0.5 to prevent clipping when close to walls
 FOV = 500.0  # Increased for better perspective with taller ceilings
 
 # Audio settings
@@ -45,7 +45,7 @@ PILLAR_SPACING = 69
 PILLAR_SIZE = 8
 WALL_HEIGHT = 100
 CAMERA_HEIGHT = 50
-RENDER_DISTANCE = 600  # Increased for taller ceilings
+RENDER_DISTANCE = 300  # Increased for taller ceilings
 
 # ============================================
 # CEILING HEIGHT MULTIPLIER - CHANGE THIS!
@@ -66,6 +66,11 @@ HEAD_BOB_SPEED = 3.0
 HEAD_BOB_AMOUNT = 4  # Slightly more pronounced for scale
 HEAD_BOB_SWAY = 1.5  # More sway for cathedral-like feel
 CAMERA_SHAKE_AMOUNT = 0.08  # Increased for more noticeable movement
+
+# Motion blur settings
+MOTION_BLUR_ENABLED = True
+MOTION_BLUR_STRENGTH = 0.01  # 0.0 = no blur, 1.0 = maximum blur
+MOTION_BLUR_FRAMES = 1  # Number of previous frames to blend
 
 # Fog settings - adjusted for taller ceilings
 FOG_START = 200
@@ -534,6 +539,7 @@ class BackroomsEngine:
         # Camera effects
         self.head_bob_time = 0
         self.is_moving = False
+        self.is_rotating = False  # Track if player is rotating with J/L
         self.camera_shake_time = random.random() * 100
         self.last_footstep_phase = 0
 
@@ -556,6 +562,11 @@ class BackroomsEngine:
         self.render_scale_transition_speed = 2.0
         self.render_surface = None
         self.update_render_surface()
+
+        # Motion blur frame buffer
+        self.motion_blur_enabled = MOTION_BLUR_ENABLED
+        self.motion_blur_frames = []
+        self.max_blur_frames = MOTION_BLUR_FRAMES
 
         # Generate textures
         print("Generating procedural textures...")
@@ -779,14 +790,17 @@ class BackroomsEngine:
         if self.mouse_look and mouse_rel:
             dx, dy = mouse_rel
             self.yaw += dx * 0.002
-            self.pitch -= dy * 0.002
+            self.pitch += dy * 0.002  # Fixed: was -= (inverted), now += (normal)
 
         # Keyboard rotation
+        self.is_rotating = False
         rot = ROTATION_SPEED * dt
         if keys[pygame.K_j]:
             self.yaw -= rot
+            self.is_rotating = True
         if keys[pygame.K_l]:
             self.yaw += rot
+            self.is_rotating = True
 
         self.pitch = max(-math.pi / 2 + 0.01, min(math.pi / 2 - 0.01, self.pitch))
 
@@ -918,16 +932,20 @@ class BackroomsEngine:
             bx, by, bz = b
 
             # Avoid division by zero
-            if abs(bz - az) < 0.0001:
+            dz = bz - az
+            if abs(dz) < 0.00001:
                 return None
 
-            t = (NEAR - az) / (bz - az)
+            t = (NEAR - az) / dz
 
-            # Clamp t to valid range
-            if t < 0 or t > 1:
+            # Clamp t to valid range with small epsilon
+            if t < -0.001 or t > 1.001:
                 return None
 
-            return (ax + (bx - ax) * t, ay + (by - ay) * t, NEAR)
+            # Clamp t to [0,1] range
+            t = max(0.0, min(1.0, t))
+
+            return (ax + (bx - ax) * t, ay + (by - ay) * t, NEAR + 0.001)  # Slight offset to prevent z-fighting
 
         out = []
         prev = poly[-1]
@@ -959,7 +977,7 @@ class BackroomsEngine:
             return []
 
         # Check for valid Z values
-        if any(not math.isfinite(p[2]) for p in out):
+        if any(not math.isfinite(p[2]) or p[2] < NEAR for p in out):
             return []
 
         return out
@@ -969,9 +987,11 @@ class BackroomsEngine:
         # Transform to camera space
         cam_pts = [self.world_to_camera(*p) for p in world_pts]
 
-        # Early rejection: if ALL points are behind camera, skip
-        all_behind = all(p[2] <= NEAR for p in cam_pts)
-        if all_behind:
+        # Check if polygon is behind camera with better tolerance
+        # Allow some vertices behind as long as not all are behind
+        behind_count = sum(1 for p in cam_pts if p[2] < NEAR)
+        if behind_count == len(cam_pts):
+            # All vertices behind camera, definitely skip
             return
 
         # Early rejection: if polygon is too far away
@@ -1041,7 +1061,7 @@ class BackroomsEngine:
                 pass
 
     def render(self, surface):
-        """Render the Backrooms with proper Z-sorting to prevent background bleed."""
+        """Render the Backrooms with proper Z-sorting and motion blur."""
         target_surface = self.render_surface
         target_surface.fill(BLACK)
 
@@ -1071,11 +1091,67 @@ class BackroomsEngine:
         # Restore original dimensions
         self.width, self.height = original_width, original_height
 
-        # Scale up to screen if needed
+        # Scale up to full screen size
         if self.render_scale < 1.0:
-            pygame.transform.smoothscale(target_surface, (self.width, self.height), surface)
+            final_surface = pygame.Surface((self.width, self.height))
+            pygame.transform.smoothscale(target_surface, (self.width, self.height), final_surface)
         else:
-            surface.blit(target_surface, (0, 0))
+            final_surface = target_surface.copy()
+
+        # Apply motion blur if enabled AND player is rotating with J/L
+        if self.motion_blur_enabled and self.is_rotating:
+            # Add current frame to buffer
+            frame_copy = final_surface.copy()
+            self.motion_blur_frames.append(frame_copy)
+
+            # Keep only the last N frames
+            if len(self.motion_blur_frames) > self.max_blur_frames:
+                self.motion_blur_frames.pop(0)
+
+            # Blend frames if we have more than one
+            if len(self.motion_blur_frames) > 1:
+                # Use numpy for proper weighted average
+                frame_arrays = []
+                weights = []
+
+                # Calculate weights (more recent = higher weight)
+                for i in range(len(self.motion_blur_frames)):
+                    weight = ((i + 1) ** 2)  # Quadratic weighting
+                    weights.append(weight)
+
+                # Normalize weights to sum to 1
+                total_weight = sum(weights)
+                weights = [w / total_weight for w in weights]
+
+                # Apply motion blur strength
+                # Reduce influence of old frames based on strength
+                for i in range(len(weights) - 1):
+                    weights[i] *= (1.0 - MOTION_BLUR_STRENGTH)
+                # Current frame gets the remaining weight
+                weights[-1] = 1.0 - sum(weights[:-1])
+
+                # Convert frames to arrays and blend
+                for i, frame in enumerate(self.motion_blur_frames):
+                    arr = pygame.surfarray.array3d(frame).astype(np.float32)
+                    frame_arrays.append(arr * weights[i])
+
+                # Sum weighted frames
+                blended_array = np.sum(frame_arrays, axis=0)
+
+                # Clamp to valid range
+                blended_array = np.clip(blended_array, 0, 255).astype(np.uint8)
+
+                # Create surface from blended array
+                blurred = pygame.surfarray.make_surface(blended_array)
+                surface.blit(blurred, (0, 0))
+            else:
+                # Not enough frames yet, just draw normally
+                surface.blit(final_surface, (0, 0))
+        else:
+            # No motion blur (disabled or not rotating), clear buffer and draw normally
+            if not self.is_rotating and len(self.motion_blur_frames) > 0:
+                self.motion_blur_frames.clear()
+            surface.blit(final_surface, (0, 0))
 
     def _get_pillar_at(self, px, pz):
         """Check if pillar exists at position with pure random generation."""
@@ -1336,6 +1412,13 @@ class BackroomsEngine:
         pygame.mouse.set_visible(not self.mouse_look)
         pygame.event.set_grab(self.mouse_look)
 
+    def toggle_motion_blur(self):
+        """Toggle motion blur effect."""
+        self.motion_blur_enabled = not self.motion_blur_enabled
+        if not self.motion_blur_enabled:
+            self.motion_blur_frames.clear()
+        print(f"Motion blur (J/L rotation): {'ON' if self.motion_blur_enabled else 'OFF'}")
+
     def load_from_save(self, save_data):
         """Load state from save data."""
         if save_data:
@@ -1441,6 +1524,8 @@ def main():
                     show_help = not show_help
                     if show_help:
                         help_timer = 999  # Keep showing until toggled off
+                if event.key == pygame.K_b:
+                    engine.toggle_motion_blur()
 
                 # Save system hotkeys
                 if event.key == pygame.K_F5:
@@ -1495,6 +1580,12 @@ def main():
         fps_text = font.render(f"FPS: {int(clock.get_fps())}", True, (180, 200, 230))
         SCREEN.blit(fps_text, (10, 10))
 
+        # Motion blur status
+        blur_status = "ON" if engine.motion_blur_enabled else "OFF"
+        blur_color = (100, 255, 100) if engine.motion_blur_enabled else (255, 100, 100)
+        blur_text = small_font.render(f"Motion Blur (J/L): {blur_status}", True, blur_color)
+        SCREEN.blit(blur_text, (10, 75))
+
         # Position info - no more zones, just random
         pos_text = small_font.render(
             f"Position: ({int(engine.x)}, {int(engine.z)}) | Mode: RANDOM | Height: {CEILING_HEIGHT_MULTIPLIER}x",
@@ -1516,11 +1607,11 @@ def main():
 
         # Help overlay
         if show_help:
-            help_y = HEIGHT - 200
+            help_y = HEIGHT - 220
             help_texts = [
                 "=== CONTROLS ===",
                 "WASD/Arrows: Move | M: Mouse Look | JL: Turn",
-                "R: Toggle Performance | H: Toggle Help",
+                "R: Toggle Performance | B: Motion Blur | H: Help",
                 "F5: Quick Save | 1-3: Load Slot | ESC: Exit",
                 "=== GENERATION ===",
                 "Pure RANDOM generation - every location is unique!",
