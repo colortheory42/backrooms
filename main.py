@@ -29,7 +29,7 @@ BLACK = (0, 150, 255)
 
 CAMERA_SMOOTHING = 0.08
 ROTATION_SMOOTHING = 0.12
-MOVEMENT_SPEED = 42  # Slightly faster for larger scale
+MOVEMENT_SPEED = 50  # Slightly faster for larger scale
 ROTATION_SPEED = 2.0
 
 # Rendering settings
@@ -572,6 +572,7 @@ class BackroomsEngine:
 
         print(f"World seed: {self.world_seed}")
         print(f"Ceiling height multiplier: {CEILING_HEIGHT_MULTIPLIER}x")
+        print("Generation mode: PURE RANDOM")
         print("Textures generated!")
 
     def _get_average_color(self, surface):
@@ -905,7 +906,9 @@ class BackroomsEngine:
         return (sx, sy)
 
     def clip_poly_near(self, poly):
-        """Sutherland-Hodgman clipping."""
+        """Sutherland-Hodgman clipping with improved edge case handling."""
+        if not poly or len(poly) < 3:
+            return []
 
         def inside(p):
             return p[2] >= NEAR
@@ -913,11 +916,18 @@ class BackroomsEngine:
         def intersect(a, b):
             ax, ay, az = a
             bx, by, bz = b
-            t = (NEAR - az) / (bz - az)
-            return (ax + (bx - ax) * t, ay + (by - ay) * t, NEAR)
 
-        if not poly:
-            return []
+            # Avoid division by zero
+            if abs(bz - az) < 0.0001:
+                return None
+
+            t = (NEAR - az) / (bz - az)
+
+            # Clamp t to valid range
+            if t < 0 or t > 1:
+                return None
+
+            return (ax + (bx - ax) * t, ay + (by - ay) * t, NEAR)
 
         out = []
         prev = poly[-1]
@@ -927,24 +937,51 @@ class BackroomsEngine:
             cur_in = inside(cur)
 
             if cur_in and prev_in:
+                # Both inside, keep current
                 out.append(cur)
             elif cur_in and not prev_in:
-                out.append(intersect(prev, cur))
+                # Entering visible space, add intersection then current
+                intersection = intersect(prev, cur)
+                if intersection:
+                    out.append(intersection)
                 out.append(cur)
             elif (not cur_in) and prev_in:
-                out.append(intersect(prev, cur))
+                # Leaving visible space, add intersection only
+                intersection = intersect(prev, cur)
+                if intersection:
+                    out.append(intersection)
+            # else: both outside, skip both
 
             prev, prev_in = cur, cur_in
+
+        # Reject degenerate polygons
+        if len(out) < 3:
+            return []
+
+        # Check for valid Z values
+        if any(not math.isfinite(p[2]) for p in out):
+            return []
 
         return out
 
     def draw_world_poly(self, surface, world_pts, color, width_edges=0, edge_color=None):
         """Draw polygon with texture color approximation and fog."""
+        # Transform to camera space
         cam_pts = [self.world_to_camera(*p) for p in world_pts]
 
+        # Early rejection: if ALL points are behind camera, skip
+        all_behind = all(p[2] <= NEAR for p in cam_pts)
+        if all_behind:
+            return
+
+        # Early rejection: if polygon is too far away
         distances = [math.sqrt(p[0] ** 2 + p[1] ** 2 + p[2] ** 2) for p in cam_pts]
         avg_dist = sum(distances) / len(distances) if distances else 0
 
+        if avg_dist > RENDER_DISTANCE * 1.5:
+            return
+
+        # Get world space averages for tinting
         avg_x = sum(p[0] for p in world_pts) / len(world_pts)
         avg_z = sum(p[2] for p in world_pts) / len(world_pts)
 
@@ -958,23 +995,50 @@ class BackroomsEngine:
         # Apply fog
         fogged_color = self.apply_fog(noisy_color, avg_dist)
 
+        # Clip against near plane
         cam_pts = self.clip_poly_near(cam_pts)
         if len(cam_pts) < 3:
             return
 
+        # Project to screen
         screen_pts = [self.project_camera(p) for p in cam_pts]
         if any(p is None for p in screen_pts):
             return
 
-        pygame.draw.polygon(surface, fogged_color, screen_pts)
+        # Additional check: make sure polygon has valid screen area
+        # Calculate approximate screen area to reject degenerate polygons
+        min_x = min(p[0] for p in screen_pts)
+        max_x = max(p[0] for p in screen_pts)
+        min_y = min(p[1] for p in screen_pts)
+        max_y = max(p[1] for p in screen_pts)
 
+        # If polygon is completely off-screen, skip it
+        if (max_x < 0 or min_x > self.width or
+                max_y < 0 or min_y > self.height):
+            return
+
+        # If polygon is too small (degenerate), skip it
+        if (max_x - min_x) < 0.5 and (max_y - min_y) < 0.5:
+            return
+
+        # Draw the polygon
+        try:
+            pygame.draw.polygon(surface, fogged_color, screen_pts)
+        except:
+            # Skip if pygame can't draw it (invalid coordinates)
+            return
+
+        # Draw edges if specified
         if width_edges > 0 and edge_color is not None:
             tinted_edge = self.apply_zone_tint(edge_color, *zone)
             noisy_edge = self.apply_surface_noise(tinted_edge, avg_x, avg_z)
             fogged_edge = self.apply_fog(noisy_edge, avg_dist)
-            for i in range(len(screen_pts)):
-                pygame.draw.line(surface, fogged_edge, screen_pts[i],
-                                 screen_pts[(i + 1) % len(screen_pts)], width_edges)
+            try:
+                for i in range(len(screen_pts)):
+                    pygame.draw.line(surface, fogged_edge, screen_pts[i],
+                                     screen_pts[(i + 1) % len(screen_pts)], width_edges)
+            except:
+                pass
 
     def render(self, surface):
         """Render the Backrooms with proper Z-sorting to prevent background bleed."""
@@ -1014,87 +1078,74 @@ class BackroomsEngine:
             surface.blit(target_surface, (0, 0))
 
     def _get_pillar_at(self, px, pz):
-        """Check if pillar exists at position with zone-based density."""
+        """Check if pillar exists at position with pure random generation."""
         key = (px, pz)
         if key in self.pillar_cache:
             return self.pillar_cache[key]
 
-        # Get zone properties
-        zone = self.get_zone_at(px, pz)
-        props = self.get_zone_properties(*zone)
+        # Pure random generation - no zones, just chaos
+        random.seed(px * 374761393 + pz * 668265263 + self.world_seed * 12345)
 
-        hash_val = (px * 374761393 + pz * 668265263 + self.world_seed * 12345) & 0x7fffffff
-        rand = (hash_val % 100) / 100
+        # Random pillar density between 20% and 50%
+        pillar_chance = random.uniform(0.20, 0.50)
+        has_pillar = random.random() < pillar_chance
 
-        has_pillar = rand < props['pillar_density']
         self.pillar_cache[key] = has_pillar
         return has_pillar
 
     def _has_wall_between(self, x1, z1, x2, z2):
-        """Check if wall exists between pillars with zone-based chance."""
+        """Check if wall exists between pillars with pure random chance."""
         key = tuple(sorted([(x1, z1), (x2, z2)]))
 
         if key in self.wall_cache:
             return self.wall_cache[key]
 
-        # Get zone properties (use midpoint)
-        mid_x = (x1 + x2) / 2
-        mid_z = (z1 + z2) / 2
-        zone = self.get_zone_at(mid_x, mid_z)
-        props = self.get_zone_properties(*zone)
+        # Pure random generation
+        random.seed(x1 * 791 + z1 * 593 + x2 * 397 + z2 * 199 + self.world_seed * 54321)
 
-        hash_val = (x1 * 791 + z1 * 593 + x2 * 397 + z2 * 199 + self.world_seed * 54321) & 0x7fffffff
-        rand = (hash_val % 100) / 100
+        # Random wall chance between 15% and 40%
+        wall_chance = random.uniform(0.15, 0.40)
+        has_wall = random.random() < wall_chance
 
-        has_wall = rand < props['wall_chance']
         self.wall_cache[key] = has_wall
         return has_wall
 
-    def _get_ceiling_height_at(self, px, pz):
-        """Get ceiling height variation based on zone - now scaled by multiplier."""
-        zone = self.get_zone_at(px, pz)
-        props = self.get_zone_properties(*zone)
-
-        hash_val = (px * 123456 + pz * 789012 + self.world_seed) & 0x7fffffff
-        variation = ((hash_val % 100) / 100 - 0.5) * 2 * props['ceiling_height_var']
-
-        # Apply ceiling height multiplier
-        return (get_scaled_wall_height() + variation * CEILING_HEIGHT_MULTIPLIER)
-
     def _get_floor_tiles(self):
-        """Get floor tiles as render items with depth."""
+        """Get floor as large simple tiles for better rendering."""
         render_items = []
         render_range = RENDER_DISTANCE
 
-        start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
-        end_x = int((self.x_s + render_range) // PILLAR_SPACING) * PILLAR_SPACING
-        start_z = int((self.z_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
-        end_z = int((self.z_s + render_range) // PILLAR_SPACING) * PILLAR_SPACING
+        # Use larger tiles for simpler, cleaner floor
+        tile_size = PILLAR_SPACING * 3  # 3x larger tiles for simplicity
+
+        start_x = int((self.x_s - render_range) // tile_size) * tile_size
+        end_x = int((self.x_s + render_range) // tile_size) * tile_size
+        start_z = int((self.z_s - render_range) // tile_size) * tile_size
+        end_z = int((self.z_s + render_range) // tile_size) * tile_size
 
         floor_y = get_scaled_floor_y()
-        edge_color = (130, 120, 110)
 
-        for px in range(start_x, end_x, PILLAR_SPACING):
-            for pz in range(start_z, end_z, PILLAR_SPACING):
-                tile_center_x = px + PILLAR_SPACING / 2
-                tile_center_z = pz + PILLAR_SPACING / 2
+        for px in range(start_x, end_x, tile_size):
+            for pz in range(start_z, end_z, tile_size):
+                tile_center_x = px + tile_size / 2
+                tile_center_z = pz + tile_size / 2
 
                 dist = math.sqrt((tile_center_x - self.x_s) ** 2 +
                                  (tile_center_z - self.z_s) ** 2)
 
-                if dist > render_range + PILLAR_SPACING:
+                if dist > render_range + tile_size:
                     continue
 
                 # Create a lambda that captures the current values
-                def make_draw_func(px=px, pz=pz, floor_y=floor_y, edge_color=edge_color):
+                def make_draw_func(px=px, pz=pz, floor_y=floor_y, tile_size=tile_size):
                     return lambda surface: self.draw_world_poly(
                         surface,
-                        [(px, floor_y, pz), (px + PILLAR_SPACING, floor_y, pz),
-                         (px + PILLAR_SPACING, floor_y, pz + PILLAR_SPACING),
-                         (px, floor_y, pz + PILLAR_SPACING)],
+                        [(px, floor_y, pz), (px + tile_size, floor_y, pz),
+                         (px + tile_size, floor_y, pz + tile_size),
+                         (px, floor_y, pz + tile_size)],
                         self.carpet_avg,
-                        width_edges=1,
-                        edge_color=edge_color
+                        width_edges=0,  # No edges for cleaner look
+                        edge_color=None
                     )
 
                 render_items.append((dist, make_draw_func()))
@@ -1102,40 +1153,41 @@ class BackroomsEngine:
         return render_items
 
     def _get_ceiling_tiles(self):
-        """Get ceiling tiles as render items with depth."""
+        """Get ceiling tiles with consistent height and simplified rendering."""
         render_items = []
         render_range = RENDER_DISTANCE
 
-        start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
-        end_x = int((self.x_s + render_range) // PILLAR_SPACING) * PILLAR_SPACING
-        start_z = int((self.z_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
-        end_z = int((self.z_s + render_range) // PILLAR_SPACING) * PILLAR_SPACING
+        # Use larger tiles for simpler, cleaner ceiling
+        tile_size = PILLAR_SPACING * 3
 
-        edge_color = (160, 190, 220)
+        start_x = int((self.x_s - render_range) // tile_size) * tile_size
+        end_x = int((self.x_s + render_range) // tile_size) * tile_size
+        start_z = int((self.z_s - render_range) // tile_size) * tile_size
+        end_z = int((self.z_s + render_range) // tile_size) * tile_size
 
-        for px in range(start_x, end_x, PILLAR_SPACING):
-            for pz in range(start_z, end_z, PILLAR_SPACING):
-                tile_center_x = px + PILLAR_SPACING / 2
-                tile_center_z = pz + PILLAR_SPACING / 2
+        # Fixed ceiling height - no variation
+        ceiling_y = get_scaled_wall_height()
+
+        for px in range(start_x, end_x, tile_size):
+            for pz in range(start_z, end_z, tile_size):
+                tile_center_x = px + tile_size / 2
+                tile_center_z = pz + tile_size / 2
 
                 dist = math.sqrt((tile_center_x - self.x_s) ** 2 +
                                  (tile_center_z - self.z_s) ** 2)
 
-                if dist > render_range + PILLAR_SPACING:
+                if dist > render_range + tile_size:
                     continue
 
-                # Variable ceiling height (already scaled)
-                ceiling_y = self._get_ceiling_height_at(px, pz)
-
-                def make_draw_func(px=px, pz=pz, ceiling_y=ceiling_y, edge_color=edge_color):
+                def make_draw_func(px=px, pz=pz, ceiling_y=ceiling_y, tile_size=tile_size):
                     return lambda surface: self.draw_world_poly(
                         surface,
-                        [(px, ceiling_y, pz), (px + PILLAR_SPACING, ceiling_y, pz),
-                         (px + PILLAR_SPACING, ceiling_y, pz + PILLAR_SPACING),
-                         (px, ceiling_y, pz + PILLAR_SPACING)],
+                        [(px, ceiling_y, pz), (px + tile_size, ceiling_y, pz),
+                         (px + tile_size, ceiling_y, pz + tile_size),
+                         (px, ceiling_y, pz + tile_size)],
                         self.ceiling_avg,
-                        width_edges=1,
-                        edge_color=edge_color
+                        width_edges=0,  # No edges for cleaner look
+                        edge_color=None
                     )
 
                 render_items.append((dist, make_draw_func()))
@@ -1165,9 +1217,9 @@ class BackroomsEngine:
         return render_items
 
     def _draw_single_pillar(self, surface, px, pz):
-        """Draw a single pillar with texture color and variable ceiling height."""
+        """Draw a single pillar with consistent height."""
         s = PILLAR_SIZE
-        h = self._get_ceiling_height_at(px, pz)
+        h = get_scaled_wall_height()  # Fixed height, no variation
         floor_y = get_scaled_floor_y()
         edge_color = (160, 140, 60)
 
@@ -1176,7 +1228,7 @@ class BackroomsEngine:
             surface,
             [(px, h, pz), (px + s, h, pz), (px + s, floor_y, pz), (px, floor_y, pz)],
             self.pillar_avg,
-            width_edges=2,
+            width_edges=1,
             edge_color=edge_color
         )
 
@@ -1185,7 +1237,7 @@ class BackroomsEngine:
             surface,
             [(px + s, h, pz + s), (px, h, pz + s), (px, floor_y, pz + s), (px + s, floor_y, pz + s)],
             self.pillar_avg,
-            width_edges=2,
+            width_edges=1,
             edge_color=edge_color
         )
 
@@ -1194,7 +1246,7 @@ class BackroomsEngine:
             surface,
             [(px, h, pz), (px, h, pz + s), (px, floor_y, pz + s), (px, floor_y, pz)],
             self.pillar_avg,
-            width_edges=2,
+            width_edges=1,
             edge_color=edge_color
         )
 
@@ -1203,7 +1255,7 @@ class BackroomsEngine:
             surface,
             [(px + s, h, pz + s), (px + s, h, pz), (px + s, floor_y, pz), (px + s, floor_y, pz + s)],
             self.pillar_avg,
-            width_edges=2,
+            width_edges=1,
             edge_color=edge_color
         )
 
@@ -1249,33 +1301,32 @@ class BackroomsEngine:
         return render_items
 
     def _draw_connecting_wall(self, surface, x1, z1, x2, z2):
-        """Draw a connecting wall with texture color and variable height."""
-        # Get average ceiling height for the wall (already scaled)
-        h1 = self._get_ceiling_height_at(x1, z1)
-        h2 = self._get_ceiling_height_at(x2, z2)
-        h = (h1 + h2) / 2
-
+        """Draw a connecting wall with consistent height."""
+        # Fixed height, no variation
+        h = get_scaled_wall_height()
         floor_y = get_scaled_floor_y()
         edge_color = (200, 150, 30)
 
         if x1 == x2:
+            # Vertical wall
             x = x1 + PILLAR_SIZE / 2
             self.draw_world_poly(
                 surface,
                 [(x, h, z1 + PILLAR_SIZE), (x, h, z2), (x, floor_y, z2),
                  (x, floor_y, z1 + PILLAR_SIZE)],
                 self.wall_avg,
-                width_edges=3,
+                width_edges=2,
                 edge_color=edge_color
             )
         else:
+            # Horizontal wall
             z = z1 + PILLAR_SIZE / 2
             self.draw_world_poly(
                 surface,
                 [(x1 + PILLAR_SPACING, h, z), (x2, h, z), (x2, floor_y, z),
                  (x1 + PILLAR_SPACING, floor_y, z)],
                 self.wall_avg,
-                width_edges=3,
+                width_edges=2,
                 edge_color=edge_color
             )
 
@@ -1444,11 +1495,9 @@ def main():
         fps_text = font.render(f"FPS: {int(clock.get_fps())}", True, (180, 200, 230))
         SCREEN.blit(fps_text, (10, 10))
 
-        # Position and zone info
-        zone = engine.get_zone_at(engine.x, engine.z)
-        zone_type = ProceduralZone.get_zone_type(*zone, engine.world_seed)
+        # Position info - no more zones, just random
         pos_text = small_font.render(
-            f"Position: ({int(engine.x)}, {int(engine.z)}) | Zone: {zone_type.upper()} | Height: {CEILING_HEIGHT_MULTIPLIER}x",
+            f"Position: ({int(engine.x)}, {int(engine.z)}) | Mode: RANDOM | Height: {CEILING_HEIGHT_MULTIPLIER}x",
             True, (150, 180, 200)
         )
         SCREEN.blit(pos_text, (10, 35))
@@ -1473,8 +1522,8 @@ def main():
                 "WASD/Arrows: Move | M: Mouse Look | JL: Turn",
                 "R: Toggle Performance | H: Toggle Help",
                 "F5: Quick Save | 1-3: Load Slot | ESC: Exit",
-                "=== ZONES ===",
-                "Explore to discover: NORMAL, DENSE, SPARSE, MAZE, OPEN",
+                "=== GENERATION ===",
+                "Pure RANDOM generation - every location is unique!",
             ]
 
             for i, text in enumerate(help_texts):
