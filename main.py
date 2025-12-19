@@ -29,12 +29,12 @@ BLACK = (0, 150, 255)
 
 CAMERA_SMOOTHING = 0.08
 ROTATION_SMOOTHING = 0.12
-MOVEMENT_SPEED = 42
+MOVEMENT_SPEED = 42  # Slightly faster for larger scale
 ROTATION_SPEED = 2.0
 
 # Rendering settings
 NEAR = 0.5
-FOV = 400.0
+FOV = 500.0  # Increased for better perspective with taller ceilings
 
 # Audio settings
 SAMPLE_RATE = 22050
@@ -45,7 +45,7 @@ PILLAR_SPACING = 69
 PILLAR_SIZE = 8
 WALL_HEIGHT = 100
 CAMERA_HEIGHT = 50
-RENDER_DISTANCE = 1000
+RENDER_DISTANCE = 600  # Increased for taller ceilings
 
 # ============================================
 # CEILING HEIGHT MULTIPLIER - CHANGE THIS!
@@ -55,21 +55,21 @@ RENDER_DISTANCE = 1000
 # 2.0 = double height (200 units)
 # 0.5 = half height (50 units)
 # 3.0 = triple height (300 units)
-CEILING_HEIGHT_MULTIPLIER = 3.0
+CEILING_HEIGHT_MULTIPLIER = 2.5
 # ============================================
 
 # Enhanced procedural generation settings
 ZONE_SIZE = 400  # Size of procedural zones
 
-# Camera effects settings
+# Camera effects settings - adjusted for taller ceilings
 HEAD_BOB_SPEED = 3.0
-HEAD_BOB_AMOUNT = 3
-HEAD_BOB_SWAY = 1
-CAMERA_SHAKE_AMOUNT = .05
+HEAD_BOB_AMOUNT = 4  # Slightly more pronounced for scale
+HEAD_BOB_SWAY = 1.5  # More sway for cathedral-like feel
+CAMERA_SHAKE_AMOUNT = 0.08  # Increased for more noticeable movement
 
-# Fog settings
-FOG_START = 180
-FOG_END = 300
+# Fog settings - adjusted for taller ceilings
+FOG_START = 200
+FOG_END = 350
 FOG_COLOR = (0, 150, 255)
 
 # Flickering settings
@@ -124,31 +124,31 @@ class ProceduralZone:
         'normal': {
             'pillar_density': 0.35,
             'wall_chance': 0.25,
-            'ceiling_height_var': 5,
+            'ceiling_height_var': 8,  # Increased variation for drama
             'color_tint': (1.0, 1.0, 1.0)
         },
         'dense': {
             'pillar_density': 0.55,
             'wall_chance': 0.4,
-            'ceiling_height_var': 3,
+            'ceiling_height_var': 5,
             'color_tint': (0.95, 0.95, 0.85)
         },
         'sparse': {
             'pillar_density': 0.15,
             'wall_chance': 0.1,
-            'ceiling_height_var': 12,
+            'ceiling_height_var': 18,  # More dramatic in open areas
             'color_tint': (1.05, 1.05, 1.15)
         },
         'maze': {
             'pillar_density': 0.7,
             'wall_chance': 0.6,
-            'ceiling_height_var': 2,
+            'ceiling_height_var': 3,
             'color_tint': (0.9, 0.9, 0.8)
         },
         'open': {
             'pillar_density': 0.08,
             'wall_chance': 0.05,
-            'ceiling_height_var': 20,
+            'ceiling_height_var': 30,  # Cathedral-like height variation
             'color_tint': (1.1, 1.1, 1.2)
         }
     }
@@ -708,34 +708,65 @@ class BackroomsEngine:
         return tuple(int(min(255, c * tint[i])) for i, c in enumerate(color))
 
     def check_collision(self, x, z):
-        """Check collision with pillars and walls."""
+        """Check collision with pillars and walls - SOLID collision detection."""
         if not math.isfinite(x) or not math.isfinite(z):
             return True
 
-        collision_radius = 2.5
-        check_range = 30
+        player_radius = 4.0  # Player's collision radius (increased for safety)
+        check_range = 100  # Check a wider range
 
-        for px in range(int(x - check_range), int(x + check_range), PILLAR_SPACING):
+        for px in range(int(x - check_range), int(x + check_range) + PILLAR_SPACING, PILLAR_SPACING):
             px_grid = (px // PILLAR_SPACING) * PILLAR_SPACING
-            for pz in range(int(z - check_range), int(z + check_range), PILLAR_SPACING):
+            for pz in range(int(z - check_range), int(z + check_range) + PILLAR_SPACING, PILLAR_SPACING):
                 pz_grid = (pz // PILLAR_SPACING) * PILLAR_SPACING
 
+                # Check pillar collision using AABB (box collision)
                 if self._get_pillar_at(px_grid, pz_grid):
-                    dist = math.sqrt((x - px_grid) ** 2 + (z - pz_grid) ** 2)
-                    if dist < PILLAR_SIZE + collision_radius:
+                    # Pillar bounding box
+                    pillar_left = px_grid
+                    pillar_right = px_grid + PILLAR_SIZE
+                    pillar_top = pz_grid
+                    pillar_bottom = pz_grid + PILLAR_SIZE
+
+                    # Player bounding circle vs pillar bounding box
+                    # Find closest point on pillar to player
+                    closest_x = max(pillar_left, min(x, pillar_right))
+                    closest_z = max(pillar_top, min(z, pillar_bottom))
+
+                    # Calculate distance to closest point
+                    dist_x = x - closest_x
+                    dist_z = z - closest_z
+                    distance = math.sqrt(dist_x * dist_x + dist_z * dist_z)
+
+                    # Collision if distance less than player radius
+                    if distance < player_radius:
                         return True
 
-                    if self._get_pillar_at(px_grid + PILLAR_SPACING, pz_grid):
-                        if self._has_wall_between(px_grid, pz_grid, px_grid + PILLAR_SPACING, pz_grid):
-                            if (px_grid <= x <= px_grid + PILLAR_SPACING and
-                                    abs(z - pz_grid) < 2.5):
-                                return True
+                # Check horizontal wall (connecting pillar at px_grid to px_grid + PILLAR_SPACING)
+                if self._get_pillar_at(px_grid + PILLAR_SPACING, pz_grid):
+                    if self._has_wall_between(px_grid, pz_grid, px_grid + PILLAR_SPACING, pz_grid):
+                        # Wall is centered at pz_grid + PILLAR_SIZE/2, extends from px_grid+PILLAR_SIZE to px_grid+PILLAR_SPACING
+                        wall_z_center = pz_grid + PILLAR_SIZE / 2
+                        wall_x_start = px_grid + PILLAR_SIZE
+                        wall_x_end = px_grid + PILLAR_SPACING
 
-                    if self._get_pillar_at(px_grid, pz_grid + PILLAR_SPACING):
-                        if self._has_wall_between(px_grid, pz_grid, px_grid, pz_grid + PILLAR_SPACING):
-                            if (pz_grid <= z <= pz_grid + PILLAR_SPACING and
-                                    abs(x - px_grid) < 2.5):
-                                return True
+                        # Check if player overlaps with wall
+                        if (wall_x_start - player_radius <= x <= wall_x_end + player_radius and
+                                abs(z - wall_z_center) < player_radius):
+                            return True
+
+                # Check vertical wall (connecting pillar at px_grid to px_grid at pz_grid + PILLAR_SPACING)
+                if self._get_pillar_at(px_grid, pz_grid + PILLAR_SPACING):
+                    if self._has_wall_between(px_grid, pz_grid, px_grid, pz_grid + PILLAR_SPACING):
+                        # Wall is centered at px_grid + PILLAR_SIZE/2, extends from pz_grid+PILLAR_SIZE to pz_grid+PILLAR_SPACING
+                        wall_x_center = px_grid + PILLAR_SIZE / 2
+                        wall_z_start = pz_grid + PILLAR_SIZE
+                        wall_z_end = pz_grid + PILLAR_SPACING
+
+                        # Check if player overlaps with wall
+                        if (wall_z_start - player_radius <= z <= wall_z_end + player_radius and
+                                abs(x - wall_x_center) < player_radius):
+                            return True
 
         return False
 
@@ -758,7 +789,7 @@ class BackroomsEngine:
 
         self.pitch = max(-math.pi / 2 + 0.01, min(math.pi / 2 - 0.01, self.pitch))
 
-        # Movement
+        # Movement with axis-separated collision for wall sliding
         speed = MOVEMENT_SPEED * dt
         cy = math.cos(self.yaw)
         sy = math.sin(self.yaw)
@@ -767,26 +798,42 @@ class BackroomsEngine:
         new_z = self.z
         self.is_moving = False
 
+        move_x = 0
+        move_z = 0
+
         if keys[pygame.K_w] or keys[pygame.K_UP]:
-            new_x += sy * speed
-            new_z += cy * speed
+            move_x += sy * speed
+            move_z += cy * speed
             self.is_moving = True
         if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            new_x -= sy * speed
-            new_z -= cy * speed
+            move_x -= sy * speed
+            move_z -= cy * speed
             self.is_moving = True
         if keys[pygame.K_a]:
-            new_x -= cy * speed
-            new_z += sy * speed
+            move_x -= cy * speed
+            move_z += sy * speed
             self.is_moving = True
         if keys[pygame.K_d]:
-            new_x += cy * speed
-            new_z -= sy * speed
+            move_x += cy * speed
+            move_z -= sy * speed
             self.is_moving = True
 
-        if not self.check_collision(new_x, new_z):
-            self.x = new_x
-            self.z = new_z
+        # Try to move along both axes
+        if move_x != 0 or move_z != 0:
+            # Try moving in both directions
+            if not self.check_collision(self.x + move_x, self.z + move_z):
+                new_x = self.x + move_x
+                new_z = self.z + move_z
+            else:
+                # If diagonal movement blocked, try X only (wall sliding)
+                if not self.check_collision(self.x + move_x, self.z):
+                    new_x = self.x + move_x
+                # Try Z only (wall sliding)
+                if not self.check_collision(self.x, self.z + move_z):
+                    new_z = self.z + move_z
+
+        self.x = new_x
+        self.z = new_z
 
         # Update head bob
         if self.is_moving:
@@ -930,7 +977,7 @@ class BackroomsEngine:
                                  screen_pts[(i + 1) % len(screen_pts)], width_edges)
 
     def render(self, surface):
-        """Render the Backrooms with optimized texture-colored rendering."""
+        """Render the Backrooms with proper Z-sorting to prevent background bleed."""
         target_surface = self.render_surface
         target_surface.fill(BLACK)
 
@@ -939,11 +986,23 @@ class BackroomsEngine:
         self.width = target_surface.get_width()
         self.height = target_surface.get_height()
 
-        # Draw geometry
-        self._draw_floor_tiles(target_surface)
-        self._draw_ceiling_tiles(target_surface)
-        self._draw_pillars(target_surface)
-        self._draw_walls(target_surface)
+        # Collect all geometry with depth for proper sorting
+        render_queue = []
+
+        # Add floor and ceiling tiles
+        render_queue.extend(self._get_floor_tiles())
+        render_queue.extend(self._get_ceiling_tiles())
+
+        # Add pillars and walls
+        render_queue.extend(self._get_pillars())
+        render_queue.extend(self._get_walls())
+
+        # Sort by depth (furthest first) - painter's algorithm
+        render_queue.sort(key=lambda item: item[0], reverse=True)
+
+        # Draw everything in sorted order
+        for depth, draw_func in render_queue:
+            draw_func(target_surface)
 
         # Restore original dimensions
         self.width, self.height = original_width, original_height
@@ -1002,8 +1061,9 @@ class BackroomsEngine:
         # Apply ceiling height multiplier
         return (get_scaled_wall_height() + variation * CEILING_HEIGHT_MULTIPLIER)
 
-    def _draw_floor_tiles(self, surface):
-        """Draw floor tiles with carpet color."""
+    def _get_floor_tiles(self):
+        """Get floor tiles as render items with depth."""
+        render_items = []
         render_range = RENDER_DISTANCE
 
         start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
@@ -1025,18 +1085,25 @@ class BackroomsEngine:
                 if dist > render_range + PILLAR_SPACING:
                     continue
 
-                self.draw_world_poly(
-                    surface,
-                    [(px, floor_y, pz), (px + PILLAR_SPACING, floor_y, pz),
-                     (px + PILLAR_SPACING, floor_y, pz + PILLAR_SPACING),
-                     (px, floor_y, pz + PILLAR_SPACING)],
-                    self.carpet_avg,
-                    width_edges=1,
-                    edge_color=edge_color
-                )
+                # Create a lambda that captures the current values
+                def make_draw_func(px=px, pz=pz, floor_y=floor_y, edge_color=edge_color):
+                    return lambda surface: self.draw_world_poly(
+                        surface,
+                        [(px, floor_y, pz), (px + PILLAR_SPACING, floor_y, pz),
+                         (px + PILLAR_SPACING, floor_y, pz + PILLAR_SPACING),
+                         (px, floor_y, pz + PILLAR_SPACING)],
+                        self.carpet_avg,
+                        width_edges=1,
+                        edge_color=edge_color
+                    )
 
-    def _draw_ceiling_tiles(self, surface):
-        """Draw ceiling tiles with ceiling color and variable height."""
+                render_items.append((dist, make_draw_func()))
+
+        return render_items
+
+    def _get_ceiling_tiles(self):
+        """Get ceiling tiles as render items with depth."""
+        render_items = []
         render_range = RENDER_DISTANCE
 
         start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
@@ -1060,19 +1127,24 @@ class BackroomsEngine:
                 # Variable ceiling height (already scaled)
                 ceiling_y = self._get_ceiling_height_at(px, pz)
 
-                self.draw_world_poly(
-                    surface,
-                    [(px, ceiling_y, pz), (px + PILLAR_SPACING, ceiling_y, pz),
-                     (px + PILLAR_SPACING, ceiling_y, pz + PILLAR_SPACING),
-                     (px, ceiling_y, pz + PILLAR_SPACING)],
-                    self.ceiling_avg,
-                    width_edges=1,
-                    edge_color=edge_color
-                )
+                def make_draw_func(px=px, pz=pz, ceiling_y=ceiling_y, edge_color=edge_color):
+                    return lambda surface: self.draw_world_poly(
+                        surface,
+                        [(px, ceiling_y, pz), (px + PILLAR_SPACING, ceiling_y, pz),
+                         (px + PILLAR_SPACING, ceiling_y, pz + PILLAR_SPACING),
+                         (px, ceiling_y, pz + PILLAR_SPACING)],
+                        self.ceiling_avg,
+                        width_edges=1,
+                        edge_color=edge_color
+                    )
 
-    def _draw_pillars(self, surface):
-        """Draw pillars."""
-        pillars = []
+                render_items.append((dist, make_draw_func()))
+
+        return render_items
+
+    def _get_pillars(self):
+        """Get pillars as render items with depth."""
+        render_items = []
         render_range = RENDER_DISTANCE
 
         start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
@@ -1085,12 +1157,12 @@ class BackroomsEngine:
                 if self._get_pillar_at(px, pz):
                     dist = math.sqrt((px - self.x_s) ** 2 + (pz - self.z_s) ** 2)
                     if dist < RENDER_DISTANCE:
-                        pillars.append((dist, px, pz))
+                        def make_draw_func(px=px, pz=pz):
+                            return lambda surface: self._draw_single_pillar(surface, px, pz)
 
-        pillars.sort(key=lambda p: p[0], reverse=True)
+                        render_items.append((dist, make_draw_func()))
 
-        for _, px, pz in pillars:
-            self._draw_single_pillar(surface, px, pz)
+        return render_items
 
     def _draw_single_pillar(self, surface, px, pz):
         """Draw a single pillar with texture color and variable ceiling height."""
@@ -1135,8 +1207,9 @@ class BackroomsEngine:
             edge_color=edge_color
         )
 
-    def _draw_walls(self, surface):
-        """Draw connecting walls."""
+    def _get_walls(self):
+        """Get walls as render items with depth."""
+        render_items = []
         render_range = RENDER_DISTANCE
 
         start_x = int((self.x_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
@@ -1147,13 +1220,33 @@ class BackroomsEngine:
         for px in range(start_x, end_x + PILLAR_SPACING, PILLAR_SPACING):
             for pz in range(start_z, end_z + PILLAR_SPACING, PILLAR_SPACING):
                 if self._get_pillar_at(px, pz):
+                    # Horizontal wall
                     if self._get_pillar_at(px + PILLAR_SPACING, pz):
                         if self._has_wall_between(px, pz, px + PILLAR_SPACING, pz):
-                            self._draw_connecting_wall(surface, px, pz, px + PILLAR_SPACING, pz)
+                            # Calculate wall center distance
+                            wall_center_x = px + PILLAR_SPACING / 2
+                            wall_center_z = pz
+                            dist = math.sqrt((wall_center_x - self.x_s) ** 2 + (wall_center_z - self.z_s) ** 2)
 
+                            def make_draw_func(px=px, pz=pz, x2=px + PILLAR_SPACING, z2=pz):
+                                return lambda surface: self._draw_connecting_wall(surface, px, pz, x2, z2)
+
+                            render_items.append((dist, make_draw_func()))
+
+                    # Vertical wall
                     if self._get_pillar_at(px, pz + PILLAR_SPACING):
                         if self._has_wall_between(px, pz, px, pz + PILLAR_SPACING):
-                            self._draw_connecting_wall(surface, px, pz, px, pz + PILLAR_SPACING)
+                            # Calculate wall center distance
+                            wall_center_x = px
+                            wall_center_z = pz + PILLAR_SPACING / 2
+                            dist = math.sqrt((wall_center_x - self.x_s) ** 2 + (wall_center_z - self.z_s) ** 2)
+
+                            def make_draw_func(px=px, pz=pz, x2=px, z2=pz + PILLAR_SPACING):
+                                return lambda surface: self._draw_connecting_wall(surface, px, pz, x2, z2)
+
+                            render_items.append((dist, make_draw_func()))
+
+        return render_items
 
     def _draw_connecting_wall(self, surface, x1, z1, x2, z2):
         """Draw a connecting wall with texture color and variable height."""
