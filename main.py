@@ -29,7 +29,7 @@ BLACK = (0, 150, 255)
 
 CAMERA_SMOOTHING = 0.08
 ROTATION_SMOOTHING = 0.12
-MOVEMENT_SPEED = 20
+MOVEMENT_SPEED = 42
 ROTATION_SPEED = 2.0
 
 # Rendering settings
@@ -55,7 +55,7 @@ RENDER_DISTANCE = 1000
 # 2.0 = double height (200 units)
 # 0.5 = half height (50 units)
 # 3.0 = triple height (300 units)
-CEILING_HEIGHT_MULTIPLIER = 2.0
+CEILING_HEIGHT_MULTIPLIER = 3.0
 # ============================================
 
 # Enhanced procedural generation settings
