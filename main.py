@@ -29,7 +29,7 @@ BLACK = (0, 150, 255)
 
 CAMERA_SMOOTHING = 0.08
 ROTATION_SMOOTHING = 0.12
-MOVEMENT_SPEED = 10
+MOVEMENT_SPEED = 20
 ROTATION_SPEED = 2.0
 
 # Rendering settings
@@ -45,7 +45,18 @@ PILLAR_SPACING = 69
 PILLAR_SIZE = 8
 WALL_HEIGHT = 100
 CAMERA_HEIGHT = 50
-RENDER_DISTANCE = 500
+RENDER_DISTANCE = 1000
+
+# ============================================
+# CEILING HEIGHT MULTIPLIER - CHANGE THIS!
+# ============================================
+# This parameter scales everything vertically
+# 1.0 = default height (100 units)
+# 2.0 = double height (200 units)
+# 0.5 = half height (50 units)
+# 3.0 = triple height (300 units)
+CEILING_HEIGHT_MULTIPLIER = 2.0
+# ============================================
 
 # Enhanced procedural generation settings
 ZONE_SIZE = 400  # Size of procedural zones
@@ -54,7 +65,7 @@ ZONE_SIZE = 400  # Size of procedural zones
 HEAD_BOB_SPEED = 3.0
 HEAD_BOB_AMOUNT = 3
 HEAD_BOB_SWAY = 1
-CAMERA_SHAKE_AMOUNT = 0.05
+CAMERA_SHAKE_AMOUNT = .05
 
 # Fog settings
 FOG_START = 180
@@ -75,6 +86,33 @@ TEXTURE_SIZE = 64
 
 # Save/load settings
 SAVE_DIR = "backrooms_saves"
+
+
+# ---------- HELPER FUNCTIONS FOR SCALED HEIGHTS ----------
+
+def get_scaled_wall_height():
+    """Get wall height scaled by multiplier."""
+    return WALL_HEIGHT * CEILING_HEIGHT_MULTIPLIER
+
+
+def get_scaled_camera_height():
+    """Get camera height scaled by multiplier."""
+    return CAMERA_HEIGHT * CEILING_HEIGHT_MULTIPLIER
+
+
+def get_scaled_floor_y():
+    """Get floor Y position scaled by multiplier."""
+    return -2 * CEILING_HEIGHT_MULTIPLIER
+
+
+def get_scaled_head_bob_amount():
+    """Get head bob amount scaled by multiplier."""
+    return HEAD_BOB_AMOUNT * CEILING_HEIGHT_MULTIPLIER
+
+
+def get_scaled_head_bob_sway():
+    """Get head bob sway scaled by multiplier."""
+    return HEAD_BOB_SWAY * CEILING_HEIGHT_MULTIPLIER
 
 
 # ---------- ENHANCED PROCEDURAL GENERATION ----------
@@ -470,9 +508,9 @@ class BackroomsEngine:
         # World seed for procedural generation
         self.world_seed = world_seed if world_seed is not None else random.randint(0, 999999)
 
-        # Camera position
+        # Camera position - use scaled camera height
         self.x = 5
-        self.y = CAMERA_HEIGHT
+        self.y = get_scaled_camera_height()
         self.z = 55
 
         self.pitch = 0
@@ -480,7 +518,7 @@ class BackroomsEngine:
 
         # Smoothed values
         self.x_s = 5
-        self.y_s = CAMERA_HEIGHT
+        self.y_s = get_scaled_camera_height()
         self.z_s = 55
         self.pitch_s = 0
         self.yaw_s = 0
@@ -533,6 +571,7 @@ class BackroomsEngine:
         self.pillar_avg = self._get_average_color(self.pillar_texture)
 
         print(f"World seed: {self.world_seed}")
+        print(f"Ceiling height multiplier: {CEILING_HEIGHT_MULTIPLIER}x")
         print("Textures generated!")
 
     def _get_average_color(self, surface):
@@ -759,23 +798,23 @@ class BackroomsEngine:
         if not math.isfinite(self.z):
             self.z = 50
         if not math.isfinite(self.y):
-            self.y = CAMERA_HEIGHT
+            self.y = get_scaled_camera_height()
         if not math.isfinite(self.pitch):
             self.pitch = 0
         if not math.isfinite(self.yaw):
             self.yaw = 0
 
-        # Calculate camera effects
+        # Calculate camera effects - use scaled values
         bob_y = 0
         bob_x = 0
         if self.is_moving:
-            bob_y = math.sin(self.head_bob_time * 2 * math.pi) * HEAD_BOB_AMOUNT
-            bob_x = math.sin(self.head_bob_time * math.pi) * HEAD_BOB_SWAY
+            bob_y = math.sin(self.head_bob_time * 2 * math.pi) * get_scaled_head_bob_amount()
+            bob_x = math.sin(self.head_bob_time * math.pi) * get_scaled_head_bob_sway()
 
-        # Camera shake
+        # Camera shake - scale by ceiling height
         self.camera_shake_time += dt
         shake_x = math.sin(self.camera_shake_time * 13.7) * CAMERA_SHAKE_AMOUNT
-        shake_y = math.cos(self.camera_shake_time * 11.3) * CAMERA_SHAKE_AMOUNT
+        shake_y = math.cos(self.camera_shake_time * 11.3) * CAMERA_SHAKE_AMOUNT * CEILING_HEIGHT_MULTIPLIER
 
         # Apply effects
         effective_y = self.y + bob_y + shake_y
@@ -953,14 +992,15 @@ class BackroomsEngine:
         return has_wall
 
     def _get_ceiling_height_at(self, px, pz):
-        """Get ceiling height variation based on zone."""
+        """Get ceiling height variation based on zone - now scaled by multiplier."""
         zone = self.get_zone_at(px, pz)
         props = self.get_zone_properties(*zone)
 
         hash_val = (px * 123456 + pz * 789012 + self.world_seed) & 0x7fffffff
         variation = ((hash_val % 100) / 100 - 0.5) * 2 * props['ceiling_height_var']
 
-        return WALL_HEIGHT + variation
+        # Apply ceiling height multiplier
+        return (get_scaled_wall_height() + variation * CEILING_HEIGHT_MULTIPLIER)
 
     def _draw_floor_tiles(self, surface):
         """Draw floor tiles with carpet color."""
@@ -971,7 +1011,7 @@ class BackroomsEngine:
         start_z = int((self.z_s - render_range) // PILLAR_SPACING) * PILLAR_SPACING
         end_z = int((self.z_s + render_range) // PILLAR_SPACING) * PILLAR_SPACING
 
-        floor_y = -2
+        floor_y = get_scaled_floor_y()
         edge_color = (130, 120, 110)
 
         for px in range(start_x, end_x, PILLAR_SPACING):
@@ -1017,7 +1057,7 @@ class BackroomsEngine:
                 if dist > render_range + PILLAR_SPACING:
                     continue
 
-                # Variable ceiling height
+                # Variable ceiling height (already scaled)
                 ceiling_y = self._get_ceiling_height_at(px, pz)
 
                 self.draw_world_poly(
@@ -1056,12 +1096,13 @@ class BackroomsEngine:
         """Draw a single pillar with texture color and variable ceiling height."""
         s = PILLAR_SIZE
         h = self._get_ceiling_height_at(px, pz)
+        floor_y = get_scaled_floor_y()
         edge_color = (160, 140, 60)
 
         # South face
         self.draw_world_poly(
             surface,
-            [(px, h, pz), (px + s, h, pz), (px + s, -2, pz), (px, -2, pz)],
+            [(px, h, pz), (px + s, h, pz), (px + s, floor_y, pz), (px, floor_y, pz)],
             self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
@@ -1070,7 +1111,7 @@ class BackroomsEngine:
         # North face
         self.draw_world_poly(
             surface,
-            [(px + s, h, pz + s), (px, h, pz + s), (px, -2, pz + s), (px + s, -2, pz + s)],
+            [(px + s, h, pz + s), (px, h, pz + s), (px, floor_y, pz + s), (px + s, floor_y, pz + s)],
             self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
@@ -1079,7 +1120,7 @@ class BackroomsEngine:
         # West face
         self.draw_world_poly(
             surface,
-            [(px, h, pz), (px, h, pz + s), (px, -2, pz + s), (px, -2, pz)],
+            [(px, h, pz), (px, h, pz + s), (px, floor_y, pz + s), (px, floor_y, pz)],
             self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
@@ -1088,7 +1129,7 @@ class BackroomsEngine:
         # East face
         self.draw_world_poly(
             surface,
-            [(px + s, h, pz + s), (px + s, h, pz), (px + s, -2, pz), (px + s, -2, pz + s)],
+            [(px + s, h, pz + s), (px + s, h, pz), (px + s, floor_y, pz), (px + s, floor_y, pz + s)],
             self.pillar_avg,
             width_edges=2,
             edge_color=edge_color
@@ -1116,19 +1157,20 @@ class BackroomsEngine:
 
     def _draw_connecting_wall(self, surface, x1, z1, x2, z2):
         """Draw a connecting wall with texture color and variable height."""
-        # Get average ceiling height for the wall
+        # Get average ceiling height for the wall (already scaled)
         h1 = self._get_ceiling_height_at(x1, z1)
         h2 = self._get_ceiling_height_at(x2, z2)
         h = (h1 + h2) / 2
 
+        floor_y = get_scaled_floor_y()
         edge_color = (200, 150, 30)
 
         if x1 == x2:
             x = x1 + PILLAR_SIZE / 2
             self.draw_world_poly(
                 surface,
-                [(x, h, z1 + PILLAR_SIZE), (x, h, z2), (x, -2, z2),
-                 (x, -2, z1 + PILLAR_SIZE)],
+                [(x, h, z1 + PILLAR_SIZE), (x, h, z2), (x, floor_y, z2),
+                 (x, floor_y, z1 + PILLAR_SIZE)],
                 self.wall_avg,
                 width_edges=3,
                 edge_color=edge_color
@@ -1137,8 +1179,8 @@ class BackroomsEngine:
             z = z1 + PILLAR_SIZE / 2
             self.draw_world_poly(
                 surface,
-                [(x1 + PILLAR_SPACING, h, z), (x2, h, z), (x2, -2, z),
-                 (x1 + PILLAR_SPACING, -2, z)],
+                [(x1 + PILLAR_SPACING, h, z), (x2, h, z), (x2, floor_y, z),
+                 (x1 + PILLAR_SPACING, floor_y, z)],
                 self.wall_avg,
                 width_edges=3,
                 edge_color=edge_color
@@ -1313,7 +1355,7 @@ def main():
         zone = engine.get_zone_at(engine.x, engine.z)
         zone_type = ProceduralZone.get_zone_type(*zone, engine.world_seed)
         pos_text = small_font.render(
-            f"Position: ({int(engine.x)}, {int(engine.z)}) | Zone: {zone_type.upper()}",
+            f"Position: ({int(engine.x)}, {int(engine.z)}) | Zone: {zone_type.upper()} | Height: {CEILING_HEIGHT_MULTIPLIER}x",
             True, (150, 180, 200)
         )
         SCREEN.blit(pos_text, (10, 35))
