@@ -21,61 +21,60 @@ FPS = 60
 RENDER_SCALE = 0.5
 
 # Blue and yellow aesthetic colors
-WALL_COLOR = (100, 150, 200)
-FLOOR_COLOR = (60, 100, 150)
-CEILING_COLOR = (180, 210, 240)
-PILLAR_COLOR = (220, 200, 100)
-BLACK = (0, 150, 255)
+WALL_COLOR = (240, 220, 80)  # Yellow walls
+FLOOR_COLOR = (30, 60, 120)  # Deep blue floor
+CEILING_COLOR = (200, 200, 240)  # Light blue ceiling
+PILLAR_COLOR = (250, 230, 90)  # Bright yellow pillars
+BLACK = (20, 40, 80)  # Dark blue background
 
-CAMERA_SMOOTHING = 0.08
-ROTATION_SMOOTHING = 0.12
-MOVEMENT_SPEED = 50  # Slightly faster for larger scale
+CAMERA_SMOOTHING = 0.25
+ROTATION_SMOOTHING = 0.3
+MOVEMENT_SPEED = 42
 ROTATION_SPEED = 2.0
 
 # Rendering settings
-NEAR = 0.1  # Reduced from 0.5 to prevent clipping when close to walls
-FOV = 500.0  # Increased for better perspective with taller ceilings
+NEAR = 0.1
+FOV = 500.0
 
 # Audio settings
 SAMPLE_RATE = 22050
 AUDIO_BUFFER_SIZE = 2048
 
 # Enhanced room settings with zones
-PILLAR_SPACING = 69
+PILLAR_SPACING = 400
+HALLWAY_WIDTH = 80
 PILLAR_SIZE = 8
+WALL_THICKNESS = 20
 WALL_HEIGHT = 100
 CAMERA_HEIGHT = 50
-RENDER_DISTANCE = 300  # Increased for taller ceilings
+RENDER_DISTANCE = 2000
 
 # ============================================
 # CEILING HEIGHT MULTIPLIER - CHANGE THIS!
 # ============================================
-# This parameter scales everything vertically
-# 1.0 = default height (100 units)
-# 2.0 = double height (200 units)
-# 0.5 = half height (50 units)
-# 3.0 = triple height (300 units)
 CEILING_HEIGHT_MULTIPLIER = 2.5
 # ============================================
 
 # Enhanced procedural generation settings
-ZONE_SIZE = 400  # Size of procedural zones
+ZONE_SIZE = 400
 
-# Camera effects settings - adjusted for taller ceilings
+# Camera effects settings
 HEAD_BOB_SPEED = 3.0
-HEAD_BOB_AMOUNT = 4  # Slightly more pronounced for scale
-HEAD_BOB_SWAY = 1.5  # More sway for cathedral-like feel
-CAMERA_SHAKE_AMOUNT = 0.08  # Increased for more noticeable movement
+HEAD_BOB_AMOUNT = 4
+HEAD_BOB_SWAY = 1.5
+CAMERA_SHAKE_AMOUNT = 0.08
 
-# Motion blur settings
-MOTION_BLUR_ENABLED = True
-MOTION_BLUR_STRENGTH = 0.01  # 0.0 = no blur, 1.0 = maximum blur
-MOTION_BLUR_FRAMES = 1  # Number of previous frames to blend
-
-# Fog settings - adjusted for taller ceilings
+# Fog settings - DISABLED for long sightlines
+FOG_ENABLED = False
 FOG_START = 200
 FOG_END = 350
-FOG_COLOR = (0, 150, 255)
+FOG_COLOR = (20, 40, 80)
+
+# Ceiling light settings
+LIGHT_SPACING = 100
+LIGHT_SIZE = 30
+LIGHT_BRIGHTNESS = 1.5
+LIGHT_FALLOFF_DISTANCE = 150
 
 # Flickering settings
 FLICKER_CHANCE = 0.0003
@@ -129,7 +128,7 @@ class ProceduralZone:
         'normal': {
             'pillar_density': 0.35,
             'wall_chance': 0.25,
-            'ceiling_height_var': 8,  # Increased variation for drama
+            'ceiling_height_var': 8,
             'color_tint': (1.0, 1.0, 1.0)
         },
         'dense': {
@@ -141,7 +140,7 @@ class ProceduralZone:
         'sparse': {
             'pillar_density': 0.15,
             'wall_chance': 0.1,
-            'ceiling_height_var': 18,  # More dramatic in open areas
+            'ceiling_height_var': 18,
             'color_tint': (1.05, 1.05, 1.15)
         },
         'maze': {
@@ -153,7 +152,7 @@ class ProceduralZone:
         'open': {
             'pillar_density': 0.08,
             'wall_chance': 0.05,
-            'ceiling_height_var': 30,  # Cathedral-like height variation
+            'ceiling_height_var': 30,
             'color_tint': (1.1, 1.1, 1.2)
         }
     }
@@ -175,16 +174,17 @@ class ProceduralZone:
 # ---------- OPTIMIZED TEXTURE GENERATION ----------
 
 def generate_carpet_texture(size=TEXTURE_SIZE):
-    """Generate a realistic carpet texture with noise and patterns."""
+    """Generate a blue carpet texture with noise and patterns."""
     texture = np.zeros((size, size, 3), dtype=np.uint8)
 
-    base_r = 170
-    base_g = 160
-    base_b = 150
+    # Blue carpet base
+    base_r = 30
+    base_g = 60
+    base_b = 140
 
     for i in range(size):
         for j in range(size):
-            noise = random.randint(-20, 20)
+            noise = random.randint(-15, 15)
             texture[i, j] = [
                 np.clip(base_r + noise, 0, 255),
                 np.clip(base_g + noise, 0, 255),
@@ -208,24 +208,29 @@ def generate_carpet_texture(size=TEXTURE_SIZE):
 
 
 def generate_ceiling_tile_texture(size=TEXTURE_SIZE):
-    """Generate a ceiling tile texture with bumpy pattern."""
+    """Generate a light blue ceiling tile texture."""
     texture = np.zeros((size, size, 3), dtype=np.uint8)
 
-    base_color = 210
+    base_r = 200
+    base_g = 200
+    base_b = 240
 
     for i in range(size):
         for j in range(size):
             pattern = math.sin(i * 0.5) * math.cos(j * 0.5)
             noise = random.randint(-10, 10)
 
-            value = int(base_color + pattern * 15 + noise)
-            value = np.clip(value, 180, 240)
+            r_value = int(base_r + pattern * 10 + noise)
+            g_value = int(base_g + pattern * 10 + noise)
+            b_value = int(base_b + pattern * 5 + noise)
 
-            texture[i, j] = [value, value, value]
+            texture[i, j] = [
+                np.clip(r_value, 180, 240),
+                np.clip(g_value, 180, 240),
+                np.clip(b_value, 220, 255)
+            ]
 
-    texture[:, :, 0] = np.clip(texture[:, :, 0] + 10, 0, 255)
-    texture[:, :, 1] = np.clip(texture[:, :, 1] + 5, 0, 255)
-
+    # Add slight staining
     num_stains = 2
     for _ in range(num_stains):
         cx, cy = random.randint(0, size - 1), random.randint(0, size - 1)
@@ -235,12 +240,10 @@ def generate_ceiling_tile_texture(size=TEXTURE_SIZE):
             for j in range(max(0, cy - radius), min(size, cy + radius)):
                 dist = math.sqrt((i - cx) ** 2 + (j - cy) ** 2)
                 if dist < radius:
-                    factor = 0.7 + (dist / radius) * 0.3
-                    texture[i, j, 0] = int(texture[i, j, 0] * factor + 40 * (1 - factor))
-                    texture[i, j, 1] = int(texture[i, j, 1] * factor + 30 * (1 - factor))
-                    texture[i, j, 2] = int(texture[i, j, 2] * factor + 20 * (1 - factor))
+                    factor = 0.85 + (dist / radius) * 0.15
+                    texture[i, j] = (texture[i, j] * factor).astype(np.uint8)
 
-    grid_color = 160
+    grid_color = 180
     for i in range(0, size, size // 4):
         if i < size:
             texture[i:i + 1, :] = grid_color
@@ -250,43 +253,48 @@ def generate_ceiling_tile_texture(size=TEXTURE_SIZE):
 
 
 def generate_wall_texture(size=TEXTURE_SIZE):
-    """Generate a drywall/painted wall texture."""
+    """Generate a yellow painted wall texture."""
     texture = np.zeros((size, size, 3), dtype=np.uint8)
 
-    base_r = 220
-    base_g = 200
-    base_b = 100
+    base_r = 240
+    base_g = 220
+    base_b = 80
 
     for i in range(size):
         for j in range(size):
-            noise = random.randint(-8, 8)
+            noise = random.randint(-12, 12)
+            pattern = 0
+            if i % 8 < 2:
+                pattern = -3
+
             texture[i, j] = [
-                np.clip(base_r + noise, 0, 255),
-                np.clip(base_g + noise, 0, 255),
-                np.clip(base_b + noise, 0, 255)
+                np.clip(base_r + noise + pattern, 0, 255),
+                np.clip(base_g + noise + pattern, 0, 255),
+                np.clip(base_b + noise + pattern, 0, 255)
             ]
 
-    num_scuffs = 8
+    # Add scuffs
+    num_scuffs = 12
     for _ in range(num_scuffs):
         x = random.randint(0, size - 1)
         y = random.randint(size // 2, size - 1)
-        length = random.randint(2, 6)
+        length = random.randint(3, 8)
 
         for dx in range(-length, length):
-            for dy in range(-1, 2):
+            for dy in range(-2, 3):
                 if 0 <= x + dx < size and 0 <= y + dy < size:
-                    texture[x + dx, y + dy] = (texture[x + dx, y + dy] * 0.7).astype(np.uint8)
+                    texture[x + dx, y + dy] = (texture[x + dx, y + dy] * 0.75).astype(np.uint8)
 
     return pygame.surfarray.make_surface(texture.swapaxes(0, 1))
 
 
 def generate_pillar_texture(size=TEXTURE_SIZE):
-    """Generate a pillar texture (painted drywall with wear)."""
+    """Generate a yellow pillar texture."""
     texture = np.zeros((size, size, 3), dtype=np.uint8)
 
-    base_r = 220
-    base_g = 200
-    base_b = 100
+    base_r = 250
+    base_g = 230
+    base_b = 90
 
     for i in range(size):
         for j in range(size):
@@ -304,7 +312,7 @@ def generate_pillar_texture(size=TEXTURE_SIZE):
             for j in range(max(0, cy - radius), min(size, cy + radius)):
                 dist = math.sqrt((i - cx) ** 2 + (j - cy) ** 2)
                 if dist < radius and random.random() < 0.7:
-                    texture[i, j] = (texture[i, j] * 0.6).astype(np.uint8)
+                    texture[i, j] = (texture[i, j] * 0.7).astype(np.uint8)
 
     return pygame.surfarray.make_surface(texture.swapaxes(0, 1))
 
@@ -360,19 +368,25 @@ def generate_footstep_sound():
 
 
 def generate_player_footstep_sound():
-    """Generate player's own footstep sound - louder and more immediate."""
-    duration = 0.25
+    """Generate player's own footstep sound - MUCH louder and more pronounced."""
+    duration = 0.35
     samples = int(SAMPLE_RATE * duration)
     t = np.linspace(0, duration, samples, False)
 
+    # Multiple impact layers for richer sound
     impact = np.exp(-t * 25) * np.sin(2 * np.pi * 90 * t)
-    impact += np.exp(-t * 20) * np.sin(2 * np.pi * 140 * t) * 0.6
-    impact += np.exp(-t * 18) * np.sin(2 * np.pi * 60 * t) * 0.4
+    impact += np.exp(-t * 20) * np.sin(2 * np.pi * 140 * t) * 0.7
+    impact += np.exp(-t * 18) * np.sin(2 * np.pi * 60 * t) * 0.5
+    impact += np.exp(-t * 30) * np.sin(2 * np.pi * 200 * t) * 0.4
 
-    reverb = np.exp(-t * 8) * np.random.normal(0, 0.08, samples)
+    # More pronounced reverb
+    reverb = np.exp(-t * 6) * np.random.normal(0, 0.12, samples)
 
-    sound = impact + reverb * 0.2
-    sound = sound / np.max(np.abs(sound)) * 0.5
+    # Add some low-frequency thump
+    thump = np.exp(-t * 15) * np.sin(2 * np.pi * 40 * t) * 0.6
+
+    sound = impact + reverb * 0.35 + thump
+    sound = sound / np.max(np.abs(sound)) * 0.85  # Increased from 0.5 to 0.85
 
     audio = np.array(sound * 32767, dtype=np.int16)
     stereo_audio = np.column_stack((audio, audio))
@@ -484,7 +498,7 @@ class SaveSystem:
         SaveSystem.ensure_save_dir()
         saves = []
 
-        for i in range(1, 6):  # Check slots 1-5
+        for i in range(1, 6):
             save_path = SaveSystem.get_save_path(i)
             if os.path.exists(save_path):
                 try:
@@ -510,72 +524,56 @@ class BackroomsEngine:
         self.width = width
         self.height = height
 
-        # World seed for procedural generation
         self.world_seed = world_seed if world_seed is not None else random.randint(0, 999999)
 
-        # Camera position - use scaled camera height
-        self.x = 5
+        # Spawn in center of a room cell (200 is half of PILLAR_SPACING 400)
+        self.x = 200
         self.y = get_scaled_camera_height()
-        self.z = 55
+        self.z = 200
 
         self.pitch = 0
         self.yaw = 0
 
-        # Smoothed values
-        self.x_s = 5
+        self.x_s = 200
         self.y_s = get_scaled_camera_height()
-        self.z_s = 55
+        self.z_s = 200
         self.pitch_s = 0
         self.yaw_s = 0
 
-        # Mouse look
         self.mouse_look = False
 
-        # Enhanced caches
         self.pillar_cache = {}
         self.wall_cache = {}
         self.zone_cache = {}
 
-        # Camera effects
         self.head_bob_time = 0
         self.is_moving = False
-        self.is_rotating = False  # Track if player is rotating with J/L
+        self.is_rotating = False
         self.camera_shake_time = random.random() * 100
         self.last_footstep_phase = 0
 
-        # Flickering
         self.flicker_timer = 0
         self.is_flickering = False
         self.flicker_brightness = 1.0
 
-        # Sound timers
         self.next_footstep = random.uniform(*FOOTSTEP_INTERVAL)
         self.next_buzz = random.uniform(*BUZZ_INTERVAL)
         self.sound_timer = 0
 
-        # Play time tracking
         self.play_time = 0
 
-        # Render scale for performance
         self.render_scale = RENDER_SCALE
         self.target_render_scale = RENDER_SCALE
         self.render_scale_transition_speed = 2.0
         self.render_surface = None
         self.update_render_surface()
 
-        # Motion blur frame buffer
-        self.motion_blur_enabled = MOTION_BLUR_ENABLED
-        self.motion_blur_frames = []
-        self.max_blur_frames = MOTION_BLUR_FRAMES
-
-        # Generate textures
         print("Generating procedural textures...")
         self.carpet_texture = generate_carpet_texture()
         self.ceiling_texture = generate_ceiling_tile_texture()
         self.wall_texture = generate_wall_texture()
         self.pillar_texture = generate_pillar_texture()
 
-        # Pre-tint textures for average colors (optimization)
         self.carpet_avg = self._get_average_color(self.carpet_texture)
         self.ceiling_avg = self._get_average_color(self.ceiling_texture)
         self.wall_avg = self._get_average_color(self.wall_texture)
@@ -583,7 +581,7 @@ class BackroomsEngine:
 
         print(f"World seed: {self.world_seed}")
         print(f"Ceiling height multiplier: {CEILING_HEIGHT_MULTIPLIER}x")
-        print("Generation mode: PURE RANDOM")
+        print("Generation mode: ROOMS & HALLWAYS")
         print("Textures generated!")
 
     def _get_average_color(self, surface):
@@ -668,10 +666,12 @@ class BackroomsEngine:
             channel.set_volume(avg_volume * left_volume, avg_volume * right_volume)
 
     def update_player_footsteps(self, dt, footstep_sound):
-        """Play footsteps synced to walking animation."""
+        """Play footsteps synced to walking animation - MORE FREQUENT."""
         if self.is_moving:
             current_phase = self.head_bob_time % 1.0
-            if self.last_footstep_phase > current_phase and current_phase < 0.1:
+            # Trigger footstep at both 0.0 and 0.5 phases for more frequent steps
+            if ((self.last_footstep_phase > 0.5 and current_phase < 0.5) or
+                    (self.last_footstep_phase > current_phase and current_phase < 0.1)):
                 footstep_sound.play()
             self.last_footstep_phase = current_phase
         else:
@@ -691,7 +691,10 @@ class BackroomsEngine:
                 self.flicker_brightness = 1.0 - FLICKER_BRIGHTNESS
 
     def apply_fog(self, color, distance):
-        """Apply subtle distance-based fog."""
+        """Apply subtle distance-based fog (can be disabled)."""
+        if not FOG_ENABLED:
+            return tuple(int(c * self.flicker_brightness) for c in color)
+
         if distance < FOG_START:
             return tuple(int(c * self.flicker_brightness) for c in color)
 
@@ -719,80 +722,112 @@ class BackroomsEngine:
         tint = props['color_tint']
         return tuple(int(min(255, c * tint[i])) for i, c in enumerate(color))
 
+    def apply_light_falloff(self, color, world_x, world_z):
+        """Apply light falloff based on distance to nearest ceiling light."""
+        light_x = round(world_x / LIGHT_SPACING) * LIGHT_SPACING
+        light_z = round(world_z / LIGHT_SPACING) * LIGHT_SPACING
+
+        dist_to_light = math.sqrt((world_x - light_x) ** 2 + (world_z - light_z) ** 2)
+
+        if dist_to_light < LIGHT_FALLOFF_DISTANCE:
+            brightness = 1.0 - (dist_to_light / LIGHT_FALLOFF_DISTANCE) * 0.4
+        else:
+            brightness = 0.6
+
+        return tuple(int(c * brightness) for c in color)
+
     def check_collision(self, x, z):
-        """Check collision with pillars and walls - SOLID collision detection."""
+        """Check collision with walls only - respects doorway and hallway openings."""
         if not math.isfinite(x) or not math.isfinite(z):
             return True
 
-        player_radius = 4.0  # Player's collision radius (increased for safety)
-        check_range = 100  # Check a wider range
+        player_radius = 15.0  # Increased from 4.0 for better collision
+        half_thick = WALL_THICKNESS / 2
+        check_range = 600  # Check more walls
 
         for px in range(int(x - check_range), int(x + check_range) + PILLAR_SPACING, PILLAR_SPACING):
             px_grid = (px // PILLAR_SPACING) * PILLAR_SPACING
             for pz in range(int(z - check_range), int(z + check_range) + PILLAR_SPACING, PILLAR_SPACING):
                 pz_grid = (pz // PILLAR_SPACING) * PILLAR_SPACING
 
-                # Check pillar collision using AABB (box collision)
-                if self._get_pillar_at(px_grid, pz_grid):
-                    # Pillar bounding box
-                    pillar_left = px_grid
-                    pillar_right = px_grid + PILLAR_SIZE
-                    pillar_top = pz_grid
-                    pillar_bottom = pz_grid + PILLAR_SIZE
+                # Check horizontal wall (runs along X axis at pz_grid)
+                if self._has_wall_between(px_grid, pz_grid, px_grid + PILLAR_SPACING, pz_grid):
+                    opening_type = self._has_doorway_in_wall(px_grid, pz_grid, px_grid + PILLAR_SPACING, pz_grid)
 
-                    # Player bounding circle vs pillar bounding box
-                    # Find closest point on pillar to player
-                    closest_x = max(pillar_left, min(x, pillar_right))
-                    closest_z = max(pillar_top, min(z, pillar_bottom))
+                    wall_z = pz_grid
+                    wall_x_start = px_grid
+                    wall_x_end = px_grid + PILLAR_SPACING
 
-                    # Calculate distance to closest point
-                    dist_x = x - closest_x
-                    dist_z = z - closest_z
-                    distance = math.sqrt(dist_x * dist_x + dist_z * dist_z)
+                    # Determine opening width
+                    if opening_type == "hallway":
+                        opening_width = HALLWAY_WIDTH
+                    elif opening_type == "doorway":
+                        opening_width = 60
+                    else:
+                        opening_width = 0
 
-                    # Collision if distance less than player radius
-                    if distance < player_radius:
-                        return True
+                    # Check collision with this horizontal wall
+                    if opening_width > 0:
+                        # Wall has an opening in the middle
+                        opening_start = wall_x_start + (PILLAR_SPACING - opening_width) / 2
+                        opening_end = opening_start + opening_width
 
-                # Check horizontal wall (connecting pillar at px_grid to px_grid + PILLAR_SPACING)
-                if self._get_pillar_at(px_grid + PILLAR_SPACING, pz_grid):
-                    if self._has_wall_between(px_grid, pz_grid, px_grid + PILLAR_SPACING, pz_grid):
-                        # Wall is centered at pz_grid + PILLAR_SIZE/2, extends from px_grid+PILLAR_SIZE to px_grid+PILLAR_SPACING
-                        wall_z_center = pz_grid + PILLAR_SIZE / 2
-                        wall_x_start = px_grid + PILLAR_SIZE
-                        wall_x_end = px_grid + PILLAR_SPACING
-
-                        # Check if player overlaps with wall
+                        # Check if player is near this wall in Z
+                        if abs(z - wall_z) < (half_thick + player_radius):
+                            # Check if player is in the solid parts (not in opening)
+                            if (wall_x_start <= x <= opening_start - player_radius) or \
+                                    (opening_end + player_radius <= x <= wall_x_end):
+                                return True
+                    else:
+                        # Solid wall, no opening
                         if (wall_x_start - player_radius <= x <= wall_x_end + player_radius and
-                                abs(z - wall_z_center) < player_radius):
+                                abs(z - wall_z) < (half_thick + player_radius)):
                             return True
 
-                # Check vertical wall (connecting pillar at px_grid to px_grid at pz_grid + PILLAR_SPACING)
-                if self._get_pillar_at(px_grid, pz_grid + PILLAR_SPACING):
-                    if self._has_wall_between(px_grid, pz_grid, px_grid, pz_grid + PILLAR_SPACING):
-                        # Wall is centered at px_grid + PILLAR_SIZE/2, extends from pz_grid+PILLAR_SIZE to pz_grid+PILLAR_SPACING
-                        wall_x_center = px_grid + PILLAR_SIZE / 2
-                        wall_z_start = pz_grid + PILLAR_SIZE
-                        wall_z_end = pz_grid + PILLAR_SPACING
+                # Check vertical wall (runs along Z axis at px_grid)
+                if self._has_wall_between(px_grid, pz_grid, px_grid, pz_grid + PILLAR_SPACING):
+                    opening_type = self._has_doorway_in_wall(px_grid, pz_grid, px_grid, pz_grid + PILLAR_SPACING)
 
-                        # Check if player overlaps with wall
+                    wall_x = px_grid
+                    wall_z_start = pz_grid
+                    wall_z_end = pz_grid + PILLAR_SPACING
+
+                    # Determine opening width
+                    if opening_type == "hallway":
+                        opening_width = HALLWAY_WIDTH
+                    elif opening_type == "doorway":
+                        opening_width = 60
+                    else:
+                        opening_width = 0
+
+                    # Check collision with this vertical wall
+                    if opening_width > 0:
+                        # Wall has an opening in the middle
+                        opening_start = wall_z_start + (PILLAR_SPACING - opening_width) / 2
+                        opening_end = opening_start + opening_width
+
+                        # Check if player is near this wall in X
+                        if abs(x - wall_x) < (half_thick + player_radius):
+                            # Check if player is in the solid parts (not in opening)
+                            if (wall_z_start <= z <= opening_start - player_radius) or \
+                                    (opening_end + player_radius <= z <= wall_z_end):
+                                return True
+                    else:
+                        # Solid wall, no opening
                         if (wall_z_start - player_radius <= z <= wall_z_end + player_radius and
-                                abs(x - wall_x_center) < player_radius):
+                                abs(x - wall_x) < (half_thick + player_radius)):
                             return True
 
         return False
 
     def update(self, dt, keys, mouse_rel):
-        # Track play time
         self.play_time += dt
 
-        # Mouse look
         if self.mouse_look and mouse_rel:
             dx, dy = mouse_rel
             self.yaw += dx * 0.002
-            self.pitch += dy * 0.002  # Fixed: was -= (inverted), now += (normal)
+            self.pitch += dy * 0.002
 
-        # Keyboard rotation
         self.is_rotating = False
         rot = ROTATION_SPEED * dt
         if keys[pygame.K_j]:
@@ -804,7 +839,6 @@ class BackroomsEngine:
 
         self.pitch = max(-math.pi / 2 + 0.01, min(math.pi / 2 - 0.01, self.pitch))
 
-        # Movement with axis-separated collision for wall sliding
         speed = MOVEMENT_SPEED * dt
         cy = math.cos(self.yaw)
         sy = math.sin(self.yaw)
@@ -833,32 +867,26 @@ class BackroomsEngine:
             move_z -= sy * speed
             self.is_moving = True
 
-        # Try to move along both axes
         if move_x != 0 or move_z != 0:
-            # Try moving in both directions
             if not self.check_collision(self.x + move_x, self.z + move_z):
                 new_x = self.x + move_x
                 new_z = self.z + move_z
             else:
-                # If diagonal movement blocked, try X only (wall sliding)
                 if not self.check_collision(self.x + move_x, self.z):
                     new_x = self.x + move_x
-                # Try Z only (wall sliding)
                 if not self.check_collision(self.x, self.z + move_z):
                     new_z = self.z + move_z
 
         self.x = new_x
         self.z = new_z
 
-        # Update head bob
         if self.is_moving:
             self.head_bob_time += dt * HEAD_BOB_SPEED
 
-        # Ensure finite values
         if not math.isfinite(self.x):
-            self.x = 0
+            self.x = 200
         if not math.isfinite(self.z):
-            self.z = 50
+            self.z = 200
         if not math.isfinite(self.y):
             self.y = get_scaled_camera_height()
         if not math.isfinite(self.pitch):
@@ -866,28 +894,31 @@ class BackroomsEngine:
         if not math.isfinite(self.yaw):
             self.yaw = 0
 
-        # Calculate camera effects - use scaled values
         bob_y = 0
         bob_x = 0
         if self.is_moving:
             bob_y = math.sin(self.head_bob_time * 2 * math.pi) * get_scaled_head_bob_amount()
             bob_x = math.sin(self.head_bob_time * math.pi) * get_scaled_head_bob_sway()
 
-        # Camera shake - scale by ceiling height
         self.camera_shake_time += dt
         shake_x = math.sin(self.camera_shake_time * 13.7) * CAMERA_SHAKE_AMOUNT
         shake_y = math.cos(self.camera_shake_time * 11.3) * CAMERA_SHAKE_AMOUNT * CEILING_HEIGHT_MULTIPLIER
 
-        # Apply effects
         effective_y = self.y + bob_y + shake_y
         effective_x = self.x + bob_x + shake_x
 
-        # Smooth camera
-        self.x_s += (effective_x - self.x_s) * CAMERA_SMOOTHING
-        self.y_s += (effective_y - self.y_s) * CAMERA_SMOOTHING
-        self.z_s += (self.z - self.z_s) * CAMERA_SMOOTHING
-        self.pitch_s += (self.pitch - self.pitch_s) * ROTATION_SMOOTHING
-        self.yaw_s += (self.yaw - self.yaw_s) * ROTATION_SMOOTHING
+        # Use different smoothing when actively moving vs not
+        # Use different smoothing when actively moving vs not
+        movement_smooth = CAMERA_SMOOTHING if self.is_moving else 1.0
+
+        self.x_s += (effective_x - self.x_s) * movement_smooth
+        self.y_s += (effective_y - self.y_s) * movement_smooth
+        self.z_s += (self.z - self.z_s) * movement_smooth
+        # Use different smoothing when actively rotating vs not
+        rotation_smooth = ROTATION_SMOOTHING if self.is_rotating else 1.0
+
+        self.pitch_s += (self.pitch - self.pitch_s) * rotation_smooth
+        self.yaw_s += (self.yaw - self.yaw_s) * rotation_smooth
 
     def world_to_camera(self, x, y, z):
         """Transform world coordinates to camera space."""
@@ -931,21 +962,18 @@ class BackroomsEngine:
             ax, ay, az = a
             bx, by, bz = b
 
-            # Avoid division by zero
             dz = bz - az
             if abs(dz) < 0.00001:
                 return None
 
             t = (NEAR - az) / dz
 
-            # Clamp t to valid range with small epsilon
             if t < -0.001 or t > 1.001:
                 return None
 
-            # Clamp t to [0,1] range
             t = max(0.0, min(1.0, t))
 
-            return (ax + (bx - ax) * t, ay + (by - ay) * t, NEAR + 0.001)  # Slight offset to prevent z-fighting
+            return (ax + (bx - ax) * t, ay + (by - ay) * t, NEAR + 0.001)
 
         out = []
         prev = poly[-1]
@@ -955,104 +983,99 @@ class BackroomsEngine:
             cur_in = inside(cur)
 
             if cur_in and prev_in:
-                # Both inside, keep current
                 out.append(cur)
             elif cur_in and not prev_in:
-                # Entering visible space, add intersection then current
                 intersection = intersect(prev, cur)
                 if intersection:
                     out.append(intersection)
                 out.append(cur)
             elif (not cur_in) and prev_in:
-                # Leaving visible space, add intersection only
                 intersection = intersect(prev, cur)
                 if intersection:
                     out.append(intersection)
-            # else: both outside, skip both
 
             prev, prev_in = cur, cur_in
 
-        # Reject degenerate polygons
         if len(out) < 3:
             return []
 
-        # Check for valid Z values
         if any(not math.isfinite(p[2]) or p[2] < NEAR for p in out):
             return []
 
         return out
 
-    def draw_world_poly(self, surface, world_pts, color, width_edges=0, edge_color=None):
-        """Draw polygon with texture color approximation and fog."""
-        # Transform to camera space
+    def draw_world_poly(self, surface, world_pts, color, width_edges=0, edge_color=None, is_wall=False, is_floor=False,
+                        is_ceiling=False):
+        """Draw polygon with texture color approximation, fog, light falloff, and AO."""
         cam_pts = [self.world_to_camera(*p) for p in world_pts]
 
-        # Check if polygon is behind camera with better tolerance
-        # Allow some vertices behind as long as not all are behind
         behind_count = sum(1 for p in cam_pts if p[2] < NEAR)
         if behind_count == len(cam_pts):
-            # All vertices behind camera, definitely skip
             return
 
-        # Early rejection: if polygon is too far away
         distances = [math.sqrt(p[0] ** 2 + p[1] ** 2 + p[2] ** 2) for p in cam_pts]
         avg_dist = sum(distances) / len(distances) if distances else 0
 
         if avg_dist > RENDER_DISTANCE * 1.5:
             return
 
-        # Get world space averages for tinting
         avg_x = sum(p[0] for p in world_pts) / len(world_pts)
         avg_z = sum(p[2] for p in world_pts) / len(world_pts)
+        avg_y = sum(p[1] for p in world_pts) / len(world_pts)
 
-        # Apply zone tint
         zone = self.get_zone_at(avg_x, avg_z)
         tinted_color = self.apply_zone_tint(color, *zone)
 
-        # Apply surface noise
         noisy_color = self.apply_surface_noise(tinted_color, avg_x, avg_z)
 
-        # Apply fog
-        fogged_color = self.apply_fog(noisy_color, avg_dist)
+        if not is_ceiling or avg_y < get_scaled_wall_height() - 10:
+            lit_color = self.apply_light_falloff(noisy_color, avg_x, avg_z)
+        else:
+            lit_color = noisy_color
 
-        # Clip against near plane
+        ao_factor = 1.0
+        if is_wall:
+            if avg_y < get_scaled_floor_y() + 20:
+                ao_factor = 0.7
+            elif avg_y > get_scaled_wall_height() - 20:
+                ao_factor = 0.8
+
+        ao_color = tuple(int(c * ao_factor) for c in lit_color)
+
+        fogged_color = self.apply_fog(ao_color, avg_dist)
+
         cam_pts = self.clip_poly_near(cam_pts)
         if len(cam_pts) < 3:
             return
 
-        # Project to screen
         screen_pts = [self.project_camera(p) for p in cam_pts]
         if any(p is None for p in screen_pts):
             return
 
-        # Additional check: make sure polygon has valid screen area
-        # Calculate approximate screen area to reject degenerate polygons
         min_x = min(p[0] for p in screen_pts)
         max_x = max(p[0] for p in screen_pts)
         min_y = min(p[1] for p in screen_pts)
         max_y = max(p[1] for p in screen_pts)
 
-        # If polygon is completely off-screen, skip it
-        if (max_x < 0 or min_x > self.width or
-                max_y < 0 or min_y > self.height):
+        # More lenient off-screen check - only cull if completely off screen with large margin
+        margin = 500
+        if (max_x < -margin or min_x > self.width + margin or
+                max_y < -margin or min_y > self.height + margin):
             return
 
-        # If polygon is too small (degenerate), skip it
         if (max_x - min_x) < 0.5 and (max_y - min_y) < 0.5:
             return
 
-        # Draw the polygon
         try:
             pygame.draw.polygon(surface, fogged_color, screen_pts)
         except:
-            # Skip if pygame can't draw it (invalid coordinates)
             return
 
-        # Draw edges if specified
         if width_edges > 0 and edge_color is not None:
             tinted_edge = self.apply_zone_tint(edge_color, *zone)
             noisy_edge = self.apply_surface_noise(tinted_edge, avg_x, avg_z)
-            fogged_edge = self.apply_fog(noisy_edge, avg_dist)
+            lit_edge = self.apply_light_falloff(noisy_edge, avg_x, avg_z)
+            fogged_edge = self.apply_fog(lit_edge, avg_dist)
             try:
                 for i in range(len(screen_pts)):
                     pygame.draw.line(surface, fogged_edge, screen_pts[i],
@@ -1061,138 +1084,138 @@ class BackroomsEngine:
                 pass
 
     def render(self, surface):
-        """Render the Backrooms with proper Z-sorting and motion blur."""
+        """Render the Backrooms with proper Z-sorting."""
         target_surface = self.render_surface
         target_surface.fill(BLACK)
 
-        # Temporarily adjust width/height for rendering
         original_width, original_height = self.width, self.height
         self.width = target_surface.get_width()
         self.height = target_surface.get_height()
 
-        # Collect all geometry with depth for proper sorting
         render_queue = []
 
-        # Add floor and ceiling tiles
+        render_queue.extend(self._get_ceiling_lights())
         render_queue.extend(self._get_floor_tiles())
         render_queue.extend(self._get_ceiling_tiles())
-
-        # Add pillars and walls
         render_queue.extend(self._get_pillars())
         render_queue.extend(self._get_walls())
 
-        # Sort by depth (furthest first) - painter's algorithm
         render_queue.sort(key=lambda item: item[0], reverse=True)
 
-        # Draw everything in sorted order
         for depth, draw_func in render_queue:
             draw_func(target_surface)
 
-        # Restore original dimensions
         self.width, self.height = original_width, original_height
 
-        # Scale up to full screen size
         if self.render_scale < 1.0:
             final_surface = pygame.Surface((self.width, self.height))
             pygame.transform.smoothscale(target_surface, (self.width, self.height), final_surface)
         else:
             final_surface = target_surface.copy()
 
-        # Apply motion blur if enabled AND player is rotating with J/L
-        if self.motion_blur_enabled and self.is_rotating:
-            # Add current frame to buffer
-            frame_copy = final_surface.copy()
-            self.motion_blur_frames.append(frame_copy)
-
-            # Keep only the last N frames
-            if len(self.motion_blur_frames) > self.max_blur_frames:
-                self.motion_blur_frames.pop(0)
-
-            # Blend frames if we have more than one
-            if len(self.motion_blur_frames) > 1:
-                # Use numpy for proper weighted average
-                frame_arrays = []
-                weights = []
-
-                # Calculate weights (more recent = higher weight)
-                for i in range(len(self.motion_blur_frames)):
-                    weight = ((i + 1) ** 2)  # Quadratic weighting
-                    weights.append(weight)
-
-                # Normalize weights to sum to 1
-                total_weight = sum(weights)
-                weights = [w / total_weight for w in weights]
-
-                # Apply motion blur strength
-                # Reduce influence of old frames based on strength
-                for i in range(len(weights) - 1):
-                    weights[i] *= (1.0 - MOTION_BLUR_STRENGTH)
-                # Current frame gets the remaining weight
-                weights[-1] = 1.0 - sum(weights[:-1])
-
-                # Convert frames to arrays and blend
-                for i, frame in enumerate(self.motion_blur_frames):
-                    arr = pygame.surfarray.array3d(frame).astype(np.float32)
-                    frame_arrays.append(arr * weights[i])
-
-                # Sum weighted frames
-                blended_array = np.sum(frame_arrays, axis=0)
-
-                # Clamp to valid range
-                blended_array = np.clip(blended_array, 0, 255).astype(np.uint8)
-
-                # Create surface from blended array
-                blurred = pygame.surfarray.make_surface(blended_array)
-                surface.blit(blurred, (0, 0))
-            else:
-                # Not enough frames yet, just draw normally
-                surface.blit(final_surface, (0, 0))
-        else:
-            # No motion blur (disabled or not rotating), clear buffer and draw normally
-            if not self.is_rotating and len(self.motion_blur_frames) > 0:
-                self.motion_blur_frames.clear()
-            surface.blit(final_surface, (0, 0))
+        surface.blit(final_surface, (0, 0))
 
     def _get_pillar_at(self, px, pz):
-        """Check if pillar exists at position with pure random generation."""
+        """No pillars at all - pure wall-only construction."""
         key = (px, pz)
         if key in self.pillar_cache:
             return self.pillar_cache[key]
 
-        # Pure random generation - no zones, just chaos
-        random.seed(px * 374761393 + pz * 668265263 + self.world_seed * 12345)
-
-        # Random pillar density between 20% and 50%
-        pillar_chance = random.uniform(0.20, 0.50)
-        has_pillar = random.random() < pillar_chance
+        has_pillar = False
 
         self.pillar_cache[key] = has_pillar
         return has_pillar
 
     def _has_wall_between(self, x1, z1, x2, z2):
-        """Check if wall exists between pillars with pure random chance."""
+        """Check if wall exists - ALL grid lines have walls, but some have doorways."""
         key = tuple(sorted([(x1, z1), (x2, z2)]))
 
         if key in self.wall_cache:
             return self.wall_cache[key]
 
-        # Pure random generation
-        random.seed(x1 * 791 + z1 * 593 + x2 * 397 + z2 * 199 + self.world_seed * 54321)
+        is_horizontal = (z1 == z2)
+        is_vertical = (x1 == x2)
 
-        # Random wall chance between 15% and 40%
-        wall_chance = random.uniform(0.15, 0.40)
-        has_wall = random.random() < wall_chance
+        if not (is_horizontal or is_vertical):
+            self.wall_cache[key] = False
+            return False
+
+        has_wall = True
 
         self.wall_cache[key] = has_wall
         return has_wall
 
-    def _get_floor_tiles(self):
-        """Get floor as large simple tiles for better rendering."""
+    def _has_doorway_in_wall(self, x1, z1, x2, z2):
+        """Check if this wall section has a doorway or hallway opening."""
+        is_horizontal = (z1 == z2)
+
+        if is_horizontal:
+            door_seed = int(z1 * 3571 + ((x1 + x2) // 2) * 2897 + self.world_seed * 9973)
+        else:
+            door_seed = int(x1 * 3571 + ((z1 + z2) // 2) * 2897 + self.world_seed * 9973)
+
+        random.seed(door_seed)
+
+        roll = random.random()
+
+        if roll < 0.3:
+            return "hallway"
+        elif roll < 0.5:
+            return "doorway"
+        else:
+            return None
+
+    def _get_ceiling_lights(self):
+        """Get ceiling light panels."""
         render_items = []
         render_range = RENDER_DISTANCE
 
-        # Use larger tiles for simpler, cleaner floor
-        tile_size = PILLAR_SPACING * 3  # 3x larger tiles for simplicity
+        ceiling_y = get_scaled_wall_height() - 2
+
+        start_x = int((self.x_s - render_range) // LIGHT_SPACING) * LIGHT_SPACING
+        end_x = int((self.x_s + render_range) // LIGHT_SPACING) * LIGHT_SPACING
+        start_z = int((self.z_s - render_range) // LIGHT_SPACING) * LIGHT_SPACING
+        end_z = int((self.z_s + render_range) // LIGHT_SPACING) * LIGHT_SPACING
+
+        for lx in range(start_x, end_x, LIGHT_SPACING):
+            for lz in range(start_z, end_z, LIGHT_SPACING):
+                light_center_x = lx + LIGHT_SPACING / 2
+                light_center_z = lz + LIGHT_SPACING / 2
+
+                dist = math.sqrt((light_center_x - self.x_s) ** 2 + (light_center_z - self.z_s) ** 2)
+
+                if dist > render_range:
+                    continue
+
+                light_color = (255, 255, 220)
+
+                lx1 = lx + LIGHT_SPACING / 2 - LIGHT_SIZE / 2
+                lx2 = lx + LIGHT_SPACING / 2 + LIGHT_SIZE / 2
+                lz1 = lz + LIGHT_SPACING / 2 - LIGHT_SIZE / 2
+                lz2 = lz + LIGHT_SPACING / 2 + LIGHT_SIZE / 2
+
+                def make_draw_func(lx1=lx1, lx2=lx2, lz1=lz1, lz2=lz2, ceiling_y=ceiling_y, light_color=light_color):
+                    return lambda surface: self.draw_world_poly(
+                        surface,
+                        [(lx1, ceiling_y, lz1), (lx2, ceiling_y, lz1),
+                         (lx2, ceiling_y, lz2), (lx1, ceiling_y, lz2)],
+                        light_color,
+                        width_edges=0,
+                        edge_color=None,
+                        is_ceiling=True
+                    )
+
+                render_items.append((dist, make_draw_func()))
+
+        return render_items
+
+    def _get_floor_tiles(self):
+        """Get floor as tiles for better rendering."""
+        render_items = []
+        render_range = RENDER_DISTANCE
+
+        # Smaller tiles for better rendering in open areas
+        tile_size = PILLAR_SPACING  # Changed from * 3 to just PILLAR_SPACING
 
         start_x = int((self.x_s - render_range) // tile_size) * tile_size
         end_x = int((self.x_s + render_range) // tile_size) * tile_size
@@ -1212,7 +1235,6 @@ class BackroomsEngine:
                 if dist > render_range + tile_size:
                     continue
 
-                # Create a lambda that captures the current values
                 def make_draw_func(px=px, pz=pz, floor_y=floor_y, tile_size=tile_size):
                     return lambda surface: self.draw_world_poly(
                         surface,
@@ -1220,8 +1242,9 @@ class BackroomsEngine:
                          (px + tile_size, floor_y, pz + tile_size),
                          (px, floor_y, pz + tile_size)],
                         self.carpet_avg,
-                        width_edges=0,  # No edges for cleaner look
-                        edge_color=None
+                        width_edges=0,
+                        edge_color=None,
+                        is_floor=True
                     )
 
                 render_items.append((dist, make_draw_func()))
@@ -1229,19 +1252,18 @@ class BackroomsEngine:
         return render_items
 
     def _get_ceiling_tiles(self):
-        """Get ceiling tiles with consistent height and simplified rendering."""
+        """Get ceiling tiles with consistent height and better rendering."""
         render_items = []
         render_range = RENDER_DISTANCE
 
-        # Use larger tiles for simpler, cleaner ceiling
-        tile_size = PILLAR_SPACING * 3
+        # Smaller tiles for better rendering in open areas
+        tile_size = PILLAR_SPACING  # Changed from * 3 to just PILLAR_SPACING
 
         start_x = int((self.x_s - render_range) // tile_size) * tile_size
         end_x = int((self.x_s + render_range) // tile_size) * tile_size
         start_z = int((self.z_s - render_range) // tile_size) * tile_size
         end_z = int((self.z_s + render_range) // tile_size) * tile_size
 
-        # Fixed ceiling height - no variation
         ceiling_y = get_scaled_wall_height()
 
         for px in range(start_x, end_x, tile_size):
@@ -1262,8 +1284,9 @@ class BackroomsEngine:
                          (px + tile_size, ceiling_y, pz + tile_size),
                          (px, ceiling_y, pz + tile_size)],
                         self.ceiling_avg,
-                        width_edges=0,  # No edges for cleaner look
-                        edge_color=None
+                        width_edges=0,
+                        edge_color=None,
+                        is_ceiling=True
                     )
 
                 render_items.append((dist, make_draw_func()))
@@ -1295,11 +1318,10 @@ class BackroomsEngine:
     def _draw_single_pillar(self, surface, px, pz):
         """Draw a single pillar with consistent height."""
         s = PILLAR_SIZE
-        h = get_scaled_wall_height()  # Fixed height, no variation
+        h = get_scaled_wall_height()
         floor_y = get_scaled_floor_y()
-        edge_color = (160, 140, 60)
+        edge_color = (220, 200, 70)
 
-        # South face
         self.draw_world_poly(
             surface,
             [(px, h, pz), (px + s, h, pz), (px + s, floor_y, pz), (px, floor_y, pz)],
@@ -1308,7 +1330,6 @@ class BackroomsEngine:
             edge_color=edge_color
         )
 
-        # North face
         self.draw_world_poly(
             surface,
             [(px + s, h, pz + s), (px, h, pz + s), (px, floor_y, pz + s), (px + s, floor_y, pz + s)],
@@ -1317,7 +1338,6 @@ class BackroomsEngine:
             edge_color=edge_color
         )
 
-        # West face
         self.draw_world_poly(
             surface,
             [(px, h, pz), (px, h, pz + s), (px, floor_y, pz + s), (px, floor_y, pz)],
@@ -1326,7 +1346,6 @@ class BackroomsEngine:
             edge_color=edge_color
         )
 
-        # East face
         self.draw_world_poly(
             surface,
             [(px + s, h, pz + s), (px + s, h, pz), (px + s, floor_y, pz), (px + s, floor_y, pz + s)],
@@ -1335,8 +1354,97 @@ class BackroomsEngine:
             edge_color=edge_color
         )
 
+    def _draw_thick_wall_segment(self, surface, x1, z1, x2, z2, h, floor_y,
+                                 edge_color, baseboard_color, baseboard_height):
+        """Draw a thick wall segment with visible depth like a wood beam."""
+        half_thick = WALL_THICKNESS / 2
+        wall_side_color = (230, 210, 70)
+
+        if x1 == x2:
+            x = x1
+
+            self.draw_world_poly(
+                surface,
+                [(x - half_thick, h, z1), (x - half_thick, h, z2),
+                 (x - half_thick, floor_y + baseboard_height, z2), (x - half_thick, floor_y + baseboard_height, z1)],
+                self.wall_avg, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+            self.draw_world_poly(
+                surface,
+                [(x - half_thick, floor_y + baseboard_height, z1), (x - half_thick, floor_y + baseboard_height, z2),
+                 (x - half_thick, floor_y, z2), (x - half_thick, floor_y, z1)],
+                baseboard_color, width_edges=0, is_wall=True
+            )
+
+            self.draw_world_poly(
+                surface,
+                [(x + half_thick, h, z2), (x + half_thick, h, z1),
+                 (x + half_thick, floor_y + baseboard_height, z1), (x + half_thick, floor_y + baseboard_height, z2)],
+                self.wall_avg, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+            self.draw_world_poly(
+                surface,
+                [(x + half_thick, floor_y + baseboard_height, z2), (x + half_thick, floor_y + baseboard_height, z1),
+                 (x + half_thick, floor_y, z1), (x + half_thick, floor_y, z2)],
+                baseboard_color, width_edges=0, is_wall=True
+            )
+
+            self.draw_world_poly(
+                surface,
+                [(x - half_thick, h, z1), (x + half_thick, h, z1),
+                 (x + half_thick, floor_y, z1), (x - half_thick, floor_y, z1)],
+                wall_side_color, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+            self.draw_world_poly(
+                surface,
+                [(x + half_thick, h, z2), (x - half_thick, h, z2),
+                 (x - half_thick, floor_y, z2), (x + half_thick, floor_y, z2)],
+                wall_side_color, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+        else:
+            z = z1
+
+            self.draw_world_poly(
+                surface,
+                [(x1, h, z - half_thick), (x2, h, z - half_thick),
+                 (x2, floor_y + baseboard_height, z - half_thick), (x1, floor_y + baseboard_height, z - half_thick)],
+                self.wall_avg, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+            self.draw_world_poly(
+                surface,
+                [(x1, floor_y + baseboard_height, z - half_thick), (x2, floor_y + baseboard_height, z - half_thick),
+                 (x2, floor_y, z - half_thick), (x1, floor_y, z - half_thick)],
+                baseboard_color, width_edges=0, is_wall=True
+            )
+
+            self.draw_world_poly(
+                surface,
+                [(x2, h, z + half_thick), (x1, h, z + half_thick),
+                 (x1, floor_y + baseboard_height, z + half_thick), (x2, floor_y + baseboard_height, z + half_thick)],
+                self.wall_avg, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+            self.draw_world_poly(
+                surface,
+                [(x2, floor_y + baseboard_height, z + half_thick), (x1, floor_y + baseboard_height, z + half_thick),
+                 (x1, floor_y, z + half_thick), (x2, floor_y, z + half_thick)],
+                baseboard_color, width_edges=0, is_wall=True
+            )
+
+            self.draw_world_poly(
+                surface,
+                [(x1, h, z + half_thick), (x1, h, z - half_thick),
+                 (x1, floor_y, z - half_thick), (x1, floor_y, z + half_thick)],
+                wall_side_color, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+            self.draw_world_poly(
+                surface,
+                [(x2, h, z - half_thick), (x2, h, z + half_thick),
+                 (x2, floor_y, z + half_thick), (x2, floor_y, z - half_thick)],
+                wall_side_color, width_edges=1, edge_color=edge_color, is_wall=True
+            )
+
     def _get_walls(self):
-        """Get walls as render items with depth."""
+        """Get walls as render items - only draws walls that have collision."""
         render_items = []
         render_range = RENDER_DISTANCE
 
@@ -1347,77 +1455,74 @@ class BackroomsEngine:
 
         for px in range(start_x, end_x + PILLAR_SPACING, PILLAR_SPACING):
             for pz in range(start_z, end_z + PILLAR_SPACING, PILLAR_SPACING):
-                if self._get_pillar_at(px, pz):
-                    # Horizontal wall
-                    if self._get_pillar_at(px + PILLAR_SPACING, pz):
-                        if self._has_wall_between(px, pz, px + PILLAR_SPACING, pz):
-                            # Calculate wall center distance
-                            wall_center_x = px + PILLAR_SPACING / 2
-                            wall_center_z = pz
-                            dist = math.sqrt((wall_center_x - self.x_s) ** 2 + (wall_center_z - self.z_s) ** 2)
+                if self._has_wall_between(px, pz, px + PILLAR_SPACING, pz):
+                    wall_center_x = px + PILLAR_SPACING / 2
+                    wall_center_z = pz
+                    dist = math.sqrt((wall_center_x - self.x_s) ** 2 + (wall_center_z - self.z_s) ** 2)
 
-                            def make_draw_func(px=px, pz=pz, x2=px + PILLAR_SPACING, z2=pz):
-                                return lambda surface: self._draw_connecting_wall(surface, px, pz, x2, z2)
+                    def make_draw_func(px=px, pz=pz):
+                        return lambda surface: self._draw_connecting_wall(surface, px, pz, px + PILLAR_SPACING, pz)
 
-                            render_items.append((dist, make_draw_func()))
+                    render_items.append((dist, make_draw_func()))
 
-                    # Vertical wall
-                    if self._get_pillar_at(px, pz + PILLAR_SPACING):
-                        if self._has_wall_between(px, pz, px, pz + PILLAR_SPACING):
-                            # Calculate wall center distance
-                            wall_center_x = px
-                            wall_center_z = pz + PILLAR_SPACING / 2
-                            dist = math.sqrt((wall_center_x - self.x_s) ** 2 + (wall_center_z - self.z_s) ** 2)
+                if self._has_wall_between(px, pz, px, pz + PILLAR_SPACING):
+                    wall_center_x = px
+                    wall_center_z = pz + PILLAR_SPACING / 2
+                    dist = math.sqrt((wall_center_x - self.x_s) ** 2 + (wall_center_z - self.z_s) ** 2)
 
-                            def make_draw_func(px=px, pz=pz, x2=px, z2=pz + PILLAR_SPACING):
-                                return lambda surface: self._draw_connecting_wall(surface, px, pz, x2, z2)
+                    def make_draw_func(px=px, pz=pz):
+                        return lambda surface: self._draw_connecting_wall(surface, px, pz, px, pz + PILLAR_SPACING)
 
-                            render_items.append((dist, make_draw_func()))
+                    render_items.append((dist, make_draw_func()))
 
         return render_items
 
     def _draw_connecting_wall(self, surface, x1, z1, x2, z2):
-        """Draw a connecting wall with consistent height."""
-        # Fixed height, no variation
+        """Draw thick 3D walls like wood beams with doorways/hallways."""
         h = get_scaled_wall_height()
         floor_y = get_scaled_floor_y()
-        edge_color = (200, 150, 30)
+        edge_color = (220, 190, 50)
+        baseboard_color = (210, 190, 60)
+        baseboard_height = 8
 
-        if x1 == x2:
-            # Vertical wall
-            x = x1 + PILLAR_SIZE / 2
-            self.draw_world_poly(
-                surface,
-                [(x, h, z1 + PILLAR_SIZE), (x, h, z2), (x, floor_y, z2),
-                 (x, floor_y, z1 + PILLAR_SIZE)],
-                self.wall_avg,
-                width_edges=2,
-                edge_color=edge_color
-            )
+        opening_type = self._has_doorway_in_wall(x1, z1, x2, z2)
+
+        if opening_type is None:
+            self._draw_thick_wall_segment(surface, x1, z1, x2, z2, h, floor_y,
+                                          edge_color, baseboard_color, baseboard_height)
         else:
-            # Horizontal wall
-            z = z1 + PILLAR_SIZE / 2
-            self.draw_world_poly(
-                surface,
-                [(x1 + PILLAR_SPACING, h, z), (x2, h, z), (x2, floor_y, z),
-                 (x1 + PILLAR_SPACING, floor_y, z)],
-                self.wall_avg,
-                width_edges=2,
-                edge_color=edge_color
-            )
+            opening_width = HALLWAY_WIDTH if opening_type == "hallway" else 300
+
+            if x1 == x2:
+                wall_length = abs(z2 - z1)
+                opening_start = min(z1, z2) + (wall_length - opening_width) / 2
+                opening_end = opening_start + opening_width
+
+                if opening_start > min(z1, z2):
+                    self._draw_thick_wall_segment(surface, x1, min(z1, z2), x2, opening_start,
+                                                  h, floor_y, edge_color, baseboard_color, baseboard_height)
+
+                if opening_end < max(z1, z2):
+                    self._draw_thick_wall_segment(surface, x1, opening_end, x2, max(z1, z2),
+                                                  h, floor_y, edge_color, baseboard_color, baseboard_height)
+            else:
+                wall_length = abs(x2 - x1)
+                opening_start = min(x1, x2) + (wall_length - opening_width) / 2
+                opening_end = opening_start + opening_width
+
+                if opening_start > min(x1, x2):
+                    self._draw_thick_wall_segment(surface, min(x1, x2), z1, opening_start, z2,
+                                                  h, floor_y, edge_color, baseboard_color, baseboard_height)
+
+                if opening_end < max(x1, x2):
+                    self._draw_thick_wall_segment(surface, opening_end, z1, max(x1, x2), z2,
+                                                  h, floor_y, edge_color, baseboard_color, baseboard_height)
 
     def toggle_mouse(self):
         """Toggle mouse look."""
         self.mouse_look = not self.mouse_look
         pygame.mouse.set_visible(not self.mouse_look)
         pygame.event.set_grab(self.mouse_look)
-
-    def toggle_motion_blur(self):
-        """Toggle motion blur effect."""
-        self.motion_blur_enabled = not self.motion_blur_enabled
-        if not self.motion_blur_enabled:
-            self.motion_blur_frames.clear()
-        print(f"Motion blur (J/L rotation): {'ON' if self.motion_blur_enabled else 'OFF'}")
 
     def load_from_save(self, save_data):
         """Load state from save data."""
@@ -1429,22 +1534,18 @@ class BackroomsEngine:
             self.pitch = player.get('pitch', self.pitch)
             self.yaw = player.get('yaw', self.yaw)
 
-            # Reset smoothed values
             self.x_s = self.x
             self.y_s = self.y
             self.z_s = self.z
             self.pitch_s = self.pitch
             self.yaw_s = self.yaw
 
-            # Load world seed
             world = save_data.get('world', {})
             self.world_seed = world.get('seed', self.world_seed)
 
-            # Load stats
             stats = save_data.get('stats', {})
             self.play_time = stats.get('play_time', 0)
 
-            # Clear caches to regenerate world
             self.pillar_cache.clear()
             self.wall_cache.clear()
             self.zone_cache.clear()
@@ -1460,7 +1561,6 @@ def main():
 
     clock = pygame.time.Clock()
 
-    # Check for save files on startup
     saves = SaveSystem.list_saves()
     if saves:
         print("\n=== Available Saves ===")
@@ -1473,7 +1573,6 @@ def main():
     font = pygame.font.SysFont("consolas", 14)
     small_font = pygame.font.SysFont("consolas", 12)
 
-    # Generate sounds
     print("Generating ambient sounds...")
     hum_sound = generate_backrooms_hum()
     footstep_sound = generate_footstep_sound()
@@ -1489,9 +1588,8 @@ def main():
     hum_sound.play(loops=-1)
     hum_sound.set_volume(0.4)
 
-    # UI state
     show_help = True
-    help_timer = 5.0  # Show help for 5 seconds
+    help_timer = 5.0
     save_message = ""
     save_message_timer = 0
 
@@ -1500,13 +1598,11 @@ def main():
         dt = clock.tick(FPS) / 1000
         mouse_rel = None
 
-        # Update help timer
         if show_help and help_timer > 0:
             help_timer -= dt
             if help_timer <= 0:
                 show_help = False
 
-        # Update save message timer
         if save_message_timer > 0:
             save_message_timer -= dt
             if save_message_timer <= 0:
@@ -1523,18 +1619,13 @@ def main():
                 if event.key == pygame.K_h:
                     show_help = not show_help
                     if show_help:
-                        help_timer = 999  # Keep showing until toggled off
-                if event.key == pygame.K_b:
-                    engine.toggle_motion_blur()
+                        help_timer = 999
 
-                # Save system hotkeys
                 if event.key == pygame.K_F5:
-                    # Quick save to slot 1
                     if SaveSystem.save_game(engine, slot=1):
                         save_message = "Game saved to slot 1"
                         save_message_timer = 2.0
 
-                # Load hotkeys (1-5 for slots)
                 if event.key == pygame.K_1:
                     save_data = SaveSystem.load_game(slot=1)
                     if save_data:
@@ -1554,8 +1645,7 @@ def main():
                         save_message = "Game loaded from slot 3"
                         save_message_timer = 2.0
 
-                # Save to specific slots (Shift+1-3)
-                if event.key == pygame.K_EXCLAIM:  # Shift+1
+                if event.key == pygame.K_EXCLAIM:
                     if SaveSystem.save_game(engine, slot=1):
                         save_message = "Game saved to slot 1"
                         save_message_timer = 2.0
@@ -1576,49 +1666,38 @@ def main():
         engine.update_render_scale(dt)
         engine.render(SCREEN)
 
-        # HUD
         fps_text = font.render(f"FPS: {int(clock.get_fps())}", True, (180, 200, 230))
         SCREEN.blit(fps_text, (10, 10))
 
-        # Motion blur status
-        blur_status = "ON" if engine.motion_blur_enabled else "OFF"
-        blur_color = (100, 255, 100) if engine.motion_blur_enabled else (255, 100, 100)
-        blur_text = small_font.render(f"Motion Blur (J/L): {blur_status}", True, blur_color)
-        SCREEN.blit(blur_text, (10, 75))
-
-        # Position info - no more zones, just random
         pos_text = small_font.render(
-            f"Position: ({int(engine.x)}, {int(engine.z)}) | Mode: RANDOM | Height: {CEILING_HEIGHT_MULTIPLIER}x",
-            True, (150, 180, 200)
+            f"Position: ({int(engine.x)}, {int(engine.z)}) | Mode: ROOMS & HALLWAYS | Height: {CEILING_HEIGHT_MULTIPLIER}x",
+            True, (200, 220, 250)
         )
         SCREEN.blit(pos_text, (10, 35))
 
-        # Play time
         minutes = int(engine.play_time // 60)
         seconds = int(engine.play_time % 60)
-        time_text = small_font.render(f"Time: {minutes:02d}:{seconds:02d}", True, (150, 180, 200))
+        time_text = small_font.render(f"Time: {minutes:02d}:{seconds:02d}", True, (200, 220, 250))
         SCREEN.blit(time_text, (10, 55))
 
-        # Save message
         if save_message:
             msg_surface = font.render(save_message, True, (100, 255, 100))
             msg_rect = msg_surface.get_rect(center=(WIDTH // 2, 50))
             SCREEN.blit(msg_surface, msg_rect)
 
-        # Help overlay
         if show_help:
-            help_y = HEIGHT - 220
+            help_y = HEIGHT - 180
             help_texts = [
                 "=== CONTROLS ===",
                 "WASD/Arrows: Move | M: Mouse Look | JL: Turn",
-                "R: Toggle Performance | B: Motion Blur | H: Help",
+                "R: Toggle Performance | H: Help",
                 "F5: Quick Save | 1-3: Load Slot | ESC: Exit",
                 "=== GENERATION ===",
-                "Pure RANDOM generation - every location is unique!",
+                "Small rooms connected by hallways - explore the maze!",
             ]
 
             for i, text in enumerate(help_texts):
-                help_surface = font.render(text, True, (200, 180, 100))
+                help_surface = font.render(text, True, (250, 240, 150))
                 SCREEN.blit(help_surface, (10, help_y + i * 25))
 
         pygame.display.flip()
