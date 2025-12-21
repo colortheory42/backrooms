@@ -42,7 +42,7 @@ AUDIO_BUFFER_SIZE = 2048
 
 # Enhanced room settings with zones
 PILLAR_SPACING = 400
-HALLWAY_WIDTH = 80
+HALLWAY_WIDTH = 300
 PILLAR_SIZE = 8
 WALL_THICKNESS = 20
 WALL_HEIGHT = 100
@@ -69,12 +69,6 @@ FOG_ENABLED = False
 FOG_START = 200
 FOG_END = 350
 FOG_COLOR = (20, 40, 80)
-
-# Ceiling light settings
-LIGHT_SPACING = 100
-LIGHT_SIZE = 30
-LIGHT_BRIGHTNESS = 1.5
-LIGHT_FALLOFF_DISTANCE = 150
 
 # Flickering settings
 FLICKER_CHANCE = 0.0003
@@ -722,20 +716,6 @@ class BackroomsEngine:
         tint = props['color_tint']
         return tuple(int(min(255, c * tint[i])) for i, c in enumerate(color))
 
-    def apply_light_falloff(self, color, world_x, world_z):
-        """Apply light falloff based on distance to nearest ceiling light."""
-        light_x = round(world_x / LIGHT_SPACING) * LIGHT_SPACING
-        light_z = round(world_z / LIGHT_SPACING) * LIGHT_SPACING
-
-        dist_to_light = math.sqrt((world_x - light_x) ** 2 + (world_z - light_z) ** 2)
-
-        if dist_to_light < LIGHT_FALLOFF_DISTANCE:
-            brightness = 1.0 - (dist_to_light / LIGHT_FALLOFF_DISTANCE) * 0.4
-        else:
-            brightness = 0.6
-
-        return tuple(int(c * brightness) for c in color)
-
     def check_collision(self, x, z):
         """Check collision with walls only - respects doorway and hallway openings."""
         if not math.isfinite(x) or not math.isfinite(z):
@@ -1006,7 +986,7 @@ class BackroomsEngine:
 
     def draw_world_poly(self, surface, world_pts, color, width_edges=0, edge_color=None, is_wall=False, is_floor=False,
                         is_ceiling=False):
-        """Draw polygon with texture color approximation, fog, light falloff, and AO."""
+        """Draw polygon with texture color approximation, fog, and AO."""
         cam_pts = [self.world_to_camera(*p) for p in world_pts]
 
         behind_count = sum(1 for p in cam_pts if p[2] < NEAR)
@@ -1028,11 +1008,6 @@ class BackroomsEngine:
 
         noisy_color = self.apply_surface_noise(tinted_color, avg_x, avg_z)
 
-        if not is_ceiling or avg_y < get_scaled_wall_height() - 10:
-            lit_color = self.apply_light_falloff(noisy_color, avg_x, avg_z)
-        else:
-            lit_color = noisy_color
-
         ao_factor = 1.0
         if is_wall:
             if avg_y < get_scaled_floor_y() + 20:
@@ -1040,7 +1015,7 @@ class BackroomsEngine:
             elif avg_y > get_scaled_wall_height() - 20:
                 ao_factor = 0.8
 
-        ao_color = tuple(int(c * ao_factor) for c in lit_color)
+        ao_color = tuple(int(c * ao_factor) for c in noisy_color)
 
         fogged_color = self.apply_fog(ao_color, avg_dist)
 
@@ -1074,8 +1049,7 @@ class BackroomsEngine:
         if width_edges > 0 and edge_color is not None:
             tinted_edge = self.apply_zone_tint(edge_color, *zone)
             noisy_edge = self.apply_surface_noise(tinted_edge, avg_x, avg_z)
-            lit_edge = self.apply_light_falloff(noisy_edge, avg_x, avg_z)
-            fogged_edge = self.apply_fog(lit_edge, avg_dist)
+            fogged_edge = self.apply_fog(noisy_edge, avg_dist)
             try:
                 for i in range(len(screen_pts)):
                     pygame.draw.line(surface, fogged_edge, screen_pts[i],
@@ -1094,7 +1068,6 @@ class BackroomsEngine:
 
         render_queue = []
 
-        render_queue.extend(self._get_ceiling_lights())
         render_queue.extend(self._get_floor_tiles())
         render_queue.extend(self._get_ceiling_tiles())
         render_queue.extend(self._get_pillars())
@@ -1164,50 +1137,6 @@ class BackroomsEngine:
             return "doorway"
         else:
             return None
-
-    def _get_ceiling_lights(self):
-        """Get ceiling light panels."""
-        render_items = []
-        render_range = RENDER_DISTANCE
-
-        ceiling_y = get_scaled_wall_height() - 2
-
-        start_x = int((self.x_s - render_range) // LIGHT_SPACING) * LIGHT_SPACING
-        end_x = int((self.x_s + render_range) // LIGHT_SPACING) * LIGHT_SPACING
-        start_z = int((self.z_s - render_range) // LIGHT_SPACING) * LIGHT_SPACING
-        end_z = int((self.z_s + render_range) // LIGHT_SPACING) * LIGHT_SPACING
-
-        for lx in range(start_x, end_x, LIGHT_SPACING):
-            for lz in range(start_z, end_z, LIGHT_SPACING):
-                light_center_x = lx + LIGHT_SPACING / 2
-                light_center_z = lz + LIGHT_SPACING / 2
-
-                dist = math.sqrt((light_center_x - self.x_s) ** 2 + (light_center_z - self.z_s) ** 2)
-
-                if dist > render_range:
-                    continue
-
-                light_color = (255, 255, 220)
-
-                lx1 = lx + LIGHT_SPACING / 2 - LIGHT_SIZE / 2
-                lx2 = lx + LIGHT_SPACING / 2 + LIGHT_SIZE / 2
-                lz1 = lz + LIGHT_SPACING / 2 - LIGHT_SIZE / 2
-                lz2 = lz + LIGHT_SPACING / 2 + LIGHT_SIZE / 2
-
-                def make_draw_func(lx1=lx1, lx2=lx2, lz1=lz1, lz2=lz2, ceiling_y=ceiling_y, light_color=light_color):
-                    return lambda surface: self.draw_world_poly(
-                        surface,
-                        [(lx1, ceiling_y, lz1), (lx2, ceiling_y, lz1),
-                         (lx2, ceiling_y, lz2), (lx1, ceiling_y, lz2)],
-                        light_color,
-                        width_edges=0,
-                        edge_color=None,
-                        is_ceiling=True
-                    )
-
-                render_items.append((dist, make_draw_func()))
-
-        return render_items
 
     def _get_floor_tiles(self):
         """Get floor as tiles for better rendering."""
